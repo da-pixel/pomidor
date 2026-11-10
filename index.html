@@ -343,6 +343,13 @@ function toWorld(cx, cy) { return [(cx - OX) / S, (cy - OY) / S]; }
 
 /* ---------- helpers ---------- */
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+// Текст точно по центру точки (x, y) — за реальними межами гліфів, а не за базовою лінією шрифту
+function fillCentered(s, x, y) {
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  const m = ctx.measureText(s);
+  const w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, h = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+  ctx.fillText(s, x - w / 2 + m.actualBoundingBoxLeft, y + h / 2 - m.actualBoundingBoxDescent);
+}
 function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
 function ell(x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.fill(); }
 function line(pts, w, col) { ctx.strokeStyle = col || '#2b1b17'; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); }
@@ -510,8 +517,8 @@ function drawChar(c) {
   if (c.num) {
     ctx.fillStyle = '#fff'; circ(0, R * 1.62, 11);
     ctx.strokeStyle = '#2b1b17'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, R * 1.62, 11, 0, TAU); ctx.stroke();
-    ctx.fillStyle = '#2b1b17'; ctx.font = `900 14px ${UIFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(c.num), 0, R * 1.62 + 1);
+    ctx.fillStyle = '#2b1b17'; ctx.font = `900 14px ${UIFONT}`;
+    fillCentered(String(c.num), 0, R * 1.62);
   }
   ctx.restore();
   ctx.globalAlpha = 1;
@@ -1468,7 +1475,8 @@ function drawStatements() {
   L.puzzle.st.forEach((q, i) => {
     const yy = y + 9 + lh * i + lh / 2;
     ctx.fillStyle = '#2b1b17'; circ(x + 22, yy, 10);
-    ctx.fillStyle = '#fff'; ctx.font = `900 12px ${UIFONT}`; ctx.textAlign = 'center'; ctx.fillText(String(q.s), x + 22, yy + 1);
+    ctx.fillStyle = '#fff'; ctx.font = `900 12px ${UIFONT}`; fillCentered(String(q.s), x + 22, yy);
+    ctx.textBaseline = 'middle';
     ctx.textAlign = 'left'; ctx.fillStyle = '#2b1b17'; ctx.font = `700 14px ${UIFONT}`;
     ctx.fillText(`«${q.text}»`, x + 40, yy + 1);
   });
