@@ -57,11 +57,22 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 .cp-top{font-size:13px;font-weight:900;letter-spacing:3px;color:#e8322c}
 .cp-prize{font-size:22px;font-weight:900;margin:8px 0 6px;line-height:1.2}
 .cp-meta{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#8a6a60;border-top:1px dashed #f0ddd5;padding-top:8px;margin-top:10px}
-.cp-opts{display:flex;gap:8px;justify-content:center;margin:6px 0 4px}
-.cp-opt{flex:1;padding:12px 4px;border-radius:14px;border:2px solid #f0ddd5;background:#fff;font-family:inherit;font-weight:800;font-size:15px;color:var(--ink);cursor:pointer;box-shadow:0 3px 0 #e6cfc6}
-.cp-opt.on{border-color:#e8322c;background:#fff0ec;box-shadow:0 3px 0 #e8322c;transform:translateY(-2px)}
-.cp-opt:disabled{opacity:.45}
-.cp-opt.on:disabled{opacity:1}
+.cp-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 4px}
+.cp-chip{border-radius:14px;border:2px solid #f0ddd5;background:#fff;font-family:inherit;font-weight:800;color:var(--ink);cursor:pointer;box-shadow:0 3px 0 #e6cfc6;padding:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-width:0;transition:transform .1s}
+.cp-chip.on{border-color:#e8322c;background:#fff0ec;box-shadow:0 3px 0 #e8322c;transform:translateY(-2px)}
+.cp-chip:disabled{opacity:.4}
+.cp-chip.on:disabled{opacity:1}
+.cp-opt{height:84px;gap:6px}
+.cp-opt .ico{font-size:30px;line-height:1}
+.cp-opt .lbl{font-size:13px;line-height:1.1}
+.cp-h{font-weight:900;font-size:16px;margin:12px 0 8px}
+.cp-days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cp-day{height:54px;gap:2px}
+.cp-day .wd{font-size:11px;font-weight:700;color:#8a6a60}
+.cp-day .dn{font-size:17px;font-weight:900;line-height:1}
+.cp-times{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.cp-time{height:40px;font-size:15px}
 #cpGo:disabled{opacity:.5}
 .cp-stamp{display:inline-block;border:3px solid #1a9b4b;color:#1a9b4b;font-weight:900;font-size:20px;padding:4px 12px;border-radius:10px;transform:rotate(-8deg);margin:8px 0}
 .btn{display:block;width:100%;padding:14px;border:none;border-radius:16px;background:var(--accent);color:#fff;font-size:18px;font-weight:800;text-decoration:none;margin-top:10px;font-family:inherit;box-shadow:0 4px 0 #b11f1a;cursor:pointer}
@@ -148,6 +159,11 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
   <div class="cp-prize" id="cpPrize"></div>
   <p id="cpText"></p>
   <div class="cp-opts" id="cpOpts"></div>
+  <div id="cpWhen" class="hidden">
+    <div class="cp-h">Коли? 📅</div>
+    <div class="cp-days" id="cpDays"></div>
+    <div class="cp-times" id="cpTimes"></div>
+  </div>
   <div id="cpStamp" class="cp-stamp hidden">АКТИВОВАНО ✅</div>
   <button class="btn" id="cpGo">Активувати</button>
   <button class="btn ghost hidden" id="cpNext">Далі ➜</button>
@@ -166,7 +182,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-6';
+const BUILD = '2026-11-10-7';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -187,7 +203,11 @@ const CONFIG = {
   // Фінал після боса: 'cutscene' — катсцена «Его розбите» з кнопками; 'coupon' — купон; 'both' — спершу катсцена, потім купон
   ending: 'both',
   coupon: { prize: 'Обери свою нагороду', days: 14,
-    options: [['coffee', '☕ Кава'], ['walk', '🚶 Прогулянка'], ['movie', '🎬 Кіно']] },
+    options: [
+      { id: 'coffee', ico: '☕', label: 'Кава',       times: ['10:00', '12:00', '14:00', '16:00', '18:00', '20:00'] },
+      { id: 'walk',   ico: '🚶', label: 'Прогулянка', times: ['11:00', '13:00', '15:00', '17:00', '18:00', '19:00'] },
+      { id: 'movie',  ico: '🎬', label: 'Кіно',       times: ['14:00', '16:00', '18:00', '19:00', '20:00', '21:00'] },
+    ] },
   finalMessage: '',
   telegram: '',                     // юзернейм БЕЗ @ для кнопки у фіналі (порожньо = без кнопки)
   telegramButton: 'Написати йому 💬',
@@ -1216,7 +1236,12 @@ function describeEvent(ev) {
     case 'boss_phase': return `👑 бос: фаза ${ev.phase}`;
     case 'game_complete': return `🏆 пройшла всю гру!${ev.deaths ? ` (смертей на босі: ${ev.deaths})` : ''}`;
     case 'final_answer': return ev.a === 'yes' ? '💬 відповіла «Так 😏»' : '💬 відповіла «Подумаю…»';
-    case 'coupon': return `🎟 активувала купон${ev.choice ? ': ' + ({ coffee: '☕ кава', walk: '🚶 прогулянка', movie: '🎬 кіно' }[ev.choice] || ev.choice) : ''}`;
+    case 'coupon': {
+      const what = ev.choice ? ({ coffee: '☕ кава', walk: '🚶 прогулянка', movie: '🎬 кіно' }[ev.choice] || ev.choice) : '';
+      let when = '';
+      if (ev.day) { const d = new Date(ev.day + 'T12:00:00'); when = ' · ' + d.toLocaleDateString('uk-UA', { weekday: 'short', day: 'numeric', month: 'long' }) + (ev.time ? ' о ' + ev.time : ''); }
+      return `🎟 активувала купон${what ? ': ' + what : ''}${when}`;
+    }
   }
   return ev.e;
 }
@@ -1418,29 +1443,64 @@ function showCoupon() {
   $('cpNum').textContent = '№ 0001';
   $('cpDate').textContent = 'Дійсний до ' + d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
   $('cpStamp').classList.add('hidden'); $('cpGo').classList.remove('hidden'); $('cpNext').classList.add('hidden');
-  cpChoice = null; $('cpGo').disabled = true; $('cpGo').textContent = 'Спершу обери 👆';
+  cp = { opt: null, day: null, time: null, done: false };
+  $('cpWhen').classList.add('hidden');
   const box = $('cpOpts'); box.innerHTML = '';
-  CONFIG.coupon.options.forEach(([id, label]) => {
-    const b = document.createElement('button'); b.className = 'cp-opt'; b.textContent = label;
+  CONFIG.coupon.options.forEach(o => {
+    const b = chip('cp-opt', [['ico', o.ico], ['lbl', o.label]]);
     b.addEventListener('click', () => {
-      if ($('cpGo').classList.contains('hidden')) return;
-      cpChoice = id; box.querySelectorAll('.cp-opt').forEach(x => x.classList.toggle('on', x === b));
-      $('cpGo').disabled = false; $('cpGo').textContent = 'Активувати 🎟'; SND.pop(); buzz('light');
+      if (cp.done) return;
+      cp.opt = o; cp.time = null; pickOn(box, b); SND.pop(); buzz('light');
+      buildWhen(); cpRefresh();
     });
     box.appendChild(b);
   });
+  cpRefresh();
   confetti();
   showOnly('coupon');
 }
-let cpChoice = null;
+let cp = { opt: null, day: null, time: null, done: false };
+function chip(cls, parts) {
+  const b = document.createElement('button'); b.className = 'cp-chip ' + cls;
+  parts.forEach(([c, t]) => { const s = document.createElement('span'); s.className = c; s.textContent = t; b.appendChild(s); });
+  return b;
+}
+function pickOn(box, b) { box.querySelectorAll('.cp-chip').forEach(x => x.classList.toggle('on', x === b)); }
+function buildWhen() {
+  $('cpWhen').classList.remove('hidden');
+  const days = $('cpDays'); days.innerHTML = '';
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(Date.now() + i * 864e5);
+    const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const wd = d.toLocaleDateString('uk-UA', { weekday: 'short' });
+    const b = chip('cp-day', [['wd', wd], ['dn', String(d.getDate())]]);
+    if (cp.day && cp.day.iso === iso) b.classList.add('on');
+    b.addEventListener('click', () => { if (cp.done) return; cp.day = { iso, date: d }; pickOn(days, b); SND.pop(); cpRefresh(); });
+    days.appendChild(b);
+  }
+  const times = $('cpTimes'); times.innerHTML = '';
+  cp.opt.times.forEach(tm => {
+    const b = chip('cp-time', [['tm', tm]]);
+    b.addEventListener('click', () => { if (cp.done) return; cp.time = tm; pickOn(times, b); SND.pop(); cpRefresh(); });
+    times.appendChild(b);
+  });
+}
+function whenText() {
+  return cp.day.date.toLocaleDateString('uk-UA', { weekday: 'short', day: 'numeric', month: 'long' }) + ' о ' + cp.time;
+}
+function cpRefresh() {
+  const g = $('cpGo'), ready = cp.opt && cp.day && cp.time;
+  g.disabled = !ready;
+  g.textContent = !cp.opt ? 'Спершу обери нагороду 👆' : !cp.day ? 'Обери день 📅' : !cp.time ? 'Обери час 🕐' : 'Активувати 🎟';
+}
 $('cpGo').addEventListener('click', () => {
-  if (!cpChoice) return;
-  const label = (CONFIG.coupon.options.find(o => o[0] === cpChoice) || [])[1] || '';
-  track('coupon', { choice: cpChoice });
-  $('cpOpts').querySelectorAll('.cp-opt').forEach(x => x.disabled = true);
-  $('cpPrize').textContent = label;
+  if (!(cp.opt && cp.day && cp.time) || cp.done) return;
+  cp.done = true;
+  track('coupon', { choice: cp.opt.id, day: cp.day.iso, time: cp.time });
+  document.querySelectorAll('#coupon .cp-chip').forEach(x => x.disabled = true);
+  $('cpPrize').textContent = `${cp.opt.ico} ${cp.opt.label}`;
   $('cpStamp').classList.remove('hidden'); $('cpGo').classList.add('hidden'); $('cpNext').classList.remove('hidden');
-  $('cpText').textContent = 'Я вже знаю 😉 Напиши, коли тобі зручно.';
+  $('cpText').textContent = `${whenText()}. Я вже знаю 😉 До зустрічі!`;
   SND.win(); buzz('win'); confetti();
 });
 $('cpNext').addEventListener('click', () => showFinal(E && E.answer));
