@@ -67,7 +67,11 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 .cp-opt .ico{font-size:30px;line-height:1}
 .cp-opt .lbl{font-size:13px;line-height:1.1}
 .cp-h{font-weight:900;font-size:16px;margin:12px 0 8px}
-.cp-days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cp-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;touch-action:pan-y}
+.cp-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.cp-nav span{font-weight:800;font-size:14px;color:#5a3d36}
+.cp-arrow{width:42px;height:34px;border-radius:12px;border:2px solid #f0ddd5;background:#fff;font-family:inherit;font-size:22px;font-weight:900;line-height:1;color:var(--ink);cursor:pointer;box-shadow:0 2px 0 #e6cfc6;padding:0}
+.cp-arrow:disabled{opacity:.3}
 .cp-day{height:54px;gap:2px}
 .cp-day .wd{font-size:11px;font-weight:700;color:#8a6a60}
 .cp-day .dn{font-size:17px;font-weight:900;line-height:1}
@@ -162,6 +166,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
   <div class="cp-opts" id="cpOpts"></div>
   <div id="cpWhen" class="hidden">
     <div class="cp-h">Коли? 📅</div>
+    <div class="cp-nav"><button class="cp-arrow" id="cpPrev" aria-label="Попередній тиждень">‹</button><span id="cpRange"></span><button class="cp-arrow" id="cpFwd" aria-label="Наступний тиждень">›</button></div>
     <div class="cp-days" id="cpDays"></div>
     <div class="cp-times" id="cpTimes"></div>
   </div>
@@ -183,7 +188,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-9';
+const BUILD = '2026-11-10-11';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -203,8 +208,8 @@ const CONFIG = {
   finalTitle: 'Ну що, нарциско, полегшало? 😏',
   // Фінал після боса: 'cutscene' — катсцена «Его розбите» з кнопками; 'coupon' — купон; 'both' — спершу катсцена, потім купон
   ending: 'both',
-  // from — з якої дати можна обирати, pickDays — скільки днів показувати
-  coupon: { prize: 'Обери свою нагороду', from: '2026-11-18', pickDays: 7,
+  // from — з якої дати можна обирати, pickDays — днів на сторінці, weeks — скільки тижнів можна гортати вперед
+  coupon: { prize: 'Обери свою нагороду', from: '2026-11-18', pickDays: 7, weeks: 4,
     options: [
       { id: 'coffee', ico: '☕', label: 'Кава',       times: ['10:00', '12:00', '14:00', '16:00', '18:00', '20:00'] },
       { id: 'walk',   ico: '🚶', label: 'Прогулянка', times: ['11:00', '13:00', '15:00', '17:00', '18:00', '19:00'] },
@@ -1446,7 +1451,7 @@ $('eThink').addEventListener('click', () => answerEnding('think'));
 
 function showCoupon() {
   state = 'coupon';
-  const days = couponDays(), d = days[days.length - 1];
+  const d = new Date(couponDays()[0]); d.setDate(d.getDate() + (CONFIG.coupon.weeks || 4) * (CONFIG.coupon.pickDays || 7) - 1);
   $('cpPrize').textContent = CONFIG.coupon.prize;
   $('cpText').textContent = 'Ти перемогла моє его 👑 Нагорода — справжня, не в грі 😉';
   $('cpNum').textContent = '№ 0001';
@@ -1477,8 +1482,28 @@ function chip(cls, parts) {
 function pickOn(box, b) { box.querySelectorAll('.cp-chip').forEach(x => x.classList.toggle('on', x === b)); }
 function buildWhen() {
   $('cpWhen').classList.remove('hidden');
+  renderDays();
+  const times = $('cpTimes'); times.innerHTML = '';
+  cp.opt.times.forEach(tm => {
+    const b = chip('cp-time', [['tm', tm]]);
+    if (cp.time === tm) b.classList.add('on');
+    b.addEventListener('click', () => { if (cp.done) return; cp.time = tm; pickOn(times, b); SND.pop(); cpRefresh(); });
+    times.appendChild(b);
+  });
+}
+// Сторінка з 7 днів; стрілки ‹ › і свайп гортають тижні
+function renderDays() {
+  const n = CONFIG.coupon.pickDays || 7, pages = CONFIG.coupon.weeks || 4;
+  const start = couponDays()[0];
+  cp.page = clamp(cp.page || 0, 0, pages - 1);
+  const list = [];
+  for (let i = 0; i < n; i++) { const d = new Date(start); d.setDate(start.getDate() + cp.page * n + i); list.push(d); }
+  const f = list[0], l = list[n - 1];
+  const fmt = d => d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
+  $('cpRange').textContent = f.getMonth() === l.getMonth() ? `${f.getDate()}–${fmt(l)}` : `${fmt(f)} – ${fmt(l)}`;
+  $('cpPrev').disabled = cp.page === 0 || cp.done; $('cpFwd').disabled = cp.page >= pages - 1 || cp.done;
   const days = $('cpDays'); days.innerHTML = '';
-  for (const d of couponDays()) {
+  for (const d of list) {
     const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const wd = d.toLocaleDateString('uk-UA', { weekday: 'short' });
     const b = chip('cp-day', [['wd', wd], ['dn', String(d.getDate())]]);
@@ -1486,19 +1511,33 @@ function buildWhen() {
     b.addEventListener('click', () => { if (cp.done) return; cp.day = { iso, date: d }; pickOn(days, b); SND.pop(); cpRefresh(); });
     days.appendChild(b);
   }
-  const times = $('cpTimes'); times.innerHTML = '';
-  cp.opt.times.forEach(tm => {
-    const b = chip('cp-time', [['tm', tm]]);
-    b.addEventListener('click', () => { if (cp.done) return; cp.time = tm; pickOn(times, b); SND.pop(); cpRefresh(); });
-    times.appendChild(b);
-  });
 }
-// Дні для вибору: з CONFIG.coupon.from (але не раніше завтра), pickDays днів поспіль
+function turnWeek(dir) {
+  if (cp.done) return;
+  const pages = CONFIG.coupon.weeks || 4, p = clamp((cp.page || 0) + dir, 0, pages - 1);
+  if (p === cp.page) return;
+  cp.page = p; SND.pop(); buzz('light'); renderDays();
+}
+$('cpPrev').addEventListener('click', () => turnWeek(-1));
+$('cpFwd').addEventListener('click', () => turnWeek(1));
+(function () {
+  let sx = null;
+  $('cpDays').addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, { passive: true });
+  $('cpDays').addEventListener('touchend', e => { if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) turnWeek(dx < 0 ? 1 : -1); });
+})();
+// Дні для вибору:
+//  • поки триває вікно from…from+pickDays-1 — лише дні з цього вікна, що ще не минули (з завтра);
+//  • коли вікно минуло (або лишився тільки сьогоднішній день) — pickDays днів, починаючи з сьогодні.
 function couponDays() {
-  const tomorrow = new Date(); tomorrow.setHours(12, 0, 0, 0); tomorrow.setDate(tomorrow.getDate() + 1);
-  const from = CONFIG.coupon.from ? new Date(CONFIG.coupon.from + 'T12:00:00') : tomorrow;
-  const start = from > tomorrow ? from : tomorrow, out = [];
-  for (let i = 0; i < (CONFIG.coupon.pickDays || 7); i++) { const d = new Date(start); d.setDate(start.getDate() + i); out.push(d); }
+  const n = CONFIG.coupon.pickDays || 7, day = (base, add) => { const d = new Date(base); d.setDate(base.getDate() + add); return d; };
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const tomorrow = day(today, 1), out = [];
+  if (CONFIG.coupon.from) {
+    const from = new Date(CONFIG.coupon.from + 'T12:00:00'), end = day(from, n - 1);
+    for (let d = from > tomorrow ? from : tomorrow; d <= end; d = day(d, 1)) out.push(d);
+    if (out.length) return out;
+  }
+  for (let i = 0; i < n; i++) out.push(day(today, i));
   return out;
 }
 function whenText() {
@@ -1513,7 +1552,7 @@ $('cpGo').addEventListener('click', () => {
   if (!(cp.opt && cp.day && cp.time) || cp.done) return;
   cp.done = true;
   track('coupon', { choice: cp.opt.id, day: cp.day.iso, time: cp.time });
-  document.querySelectorAll('#coupon .cp-chip').forEach(x => x.disabled = true);
+  document.querySelectorAll('#coupon .cp-chip, #coupon .cp-arrow').forEach(x => x.disabled = true);
   $('cpPrize').textContent = `${cp.opt.ico} ${cp.opt.label}`;
   $('cpStamp').classList.remove('hidden'); $('cpGo').classList.add('hidden'); $('cpNext').classList.remove('hidden');
   $('cpText').textContent = `${whenText()}. Я вже знаю 😉 До зустрічі!`;
