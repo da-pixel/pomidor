@@ -35,7 +35,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 .hi{font-weight:700;color:#a0523f}
 .tag{display:inline-block;background:#ffe3d6;border-radius:999px;padding:4px 10px;font-weight:800;font-size:13px;color:#a0523f}
 .goal{display:flex;justify-content:center;gap:8px;margin:4px 0 6px;flex-wrap:nowrap}
-.goal span{background:#fff0e6;border-radius:12px;padding:8px 10px;font-weight:800;font-size:15px;white-space:nowrap}
+.goal{gap:6px}
+.goal span{background:#fff0e6;border-radius:12px;padding:8px 8px;font-weight:800;font-size:14px;white-space:nowrap}
 .stars{font-size:38px;letter-spacing:4px;margin:6px 0}
 .btn{display:block;width:100%;padding:14px;border:none;border-radius:16px;background:var(--accent);color:#fff;font-size:18px;font-weight:800;text-decoration:none;margin-top:10px;font-family:inherit;box-shadow:0 4px 0 #b11f1a;cursor:pointer}
 .btn:active{transform:translateY(2px);box-shadow:0 2px 0 #b11f1a}
@@ -177,13 +178,14 @@ const LEVELS = [
   { name: 'Озеро Нарциса', ammo: 16, preview: 0.28,
     phases: [{ mode: 'clones', goal: 3 }],
     desc: 'Біля озера троє мене. Двоє — відображення, і вони завжди брешуть. Справжній — єдиний, хто каже правду. Прочитай, що кажуть усі троє, вирахуй справжнього й влуч. Вони ще й міняються місцями. Влучиш у копію — мінус життя.' },
-  { name: 'Бос: Его', ammo: 36, preview: 0.25, boss: true,
+  { name: 'Бос: Его', ammo: 48, preview: 0.25, boss: true, timeLimit: 120,
     phases: [
-      { mode: 'windmirror', goal: 3, windMax: 200, mspeed: 1.25, speed: 0.75 },
-      { mode: 'cave', goal: 2, mirrored: true },
-      { mode: 'order', goal: 2, amp: [34, 48], sp: [1.15, 1.55], br: 18, timer: 30 },
+      { mode: 'carousel', goal: 3, rings: [{ r: 2.1, sp: 1.3, ph: 0, len: 2.6 }, { r: 2.1, sp: 1.3, ph: Math.PI, len: 2.6 }, { r: 3.1, sp: -0.8, ph: 1, len: 3.2 }] },
+      { mode: 'teleport', goal: 3, every: 1.7 },
+      { mode: 'clones', goal: 2, fast: true, windMax: 140 },
+      { mode: 'invisible', goal: 3 },
     ],
-    desc: 'Фінальний бос — моє его 👑 Фаза 1: вітер + дзеркало. Фаза 2: печера, але дзеркало з іншого боку. Фаза 3: кульки на час. Помідори й життя — спільні на весь бій.' },
+    desc: 'Фінальний бос — моє его 👑 На весь бій — 2 хвилини. Фаза 1: дзеркальна карусель. Фаза 2: телепорт — кидай туди, де спалахне коло. Фаза 3: доппельгангери під вітром. Фаза 4: справжнє его невидиме — шукай його за відображенням в озері.' },
 ];
 
 /* ============================================================ */
@@ -199,7 +201,9 @@ const WW = 400, WH = 700, GROUND = 668;
 const G = 900, LAUNCH = { x: 200, y: 636 }, MAXPULL = 130, KPOW = 8.6, PR = 9;
 const R = 26;
 
-const cv = $('c'), ctx = cv.getContext('2d');
+const cv = $('c'), mainCtx = cv.getContext('2d');
+let ctx = mainCtx;
+const ghostCv = document.createElement('canvas'), ghostCtx = ghostCv.getContext('2d');
 let W = 0, H = 0, DPR = 1, S = 1, OX = 0, OY = 0, time = 0;
 
 /* ---------- Telegram ---------- */
@@ -343,9 +347,9 @@ function drawGlasses(x, y, s, hanging) {
   ctx.save(); ctx.translate(x, y);
   if (hanging) ctx.rotate(Math.PI / 2 + 0.05);
   const w = s * 0.62, h = s * 0.42, gap = s * 0.12;
-  ctx.fillStyle = CONFIG.look.lens; ctx.globalAlpha = 0.9;
+  ctx.fillStyle = CONFIG.look.lens; ctx.globalAlpha = 0.9 * baseAlpha;
   rr(-gap / 2 - w, -h / 2, w, h, s * 0.08); ctx.fill(); rr(gap / 2, -h / 2, w, h, s * 0.08); ctx.fill();
-  ctx.globalAlpha = 1; ctx.strokeStyle = '#d9dde6'; ctx.lineWidth = Math.max(1, s * 0.05);
+  ctx.globalAlpha = baseAlpha; ctx.strokeStyle = '#d9dde6'; ctx.lineWidth = Math.max(1, s * 0.05);
   rr(-gap / 2 - w, -h / 2, w, h, s * 0.08); ctx.stroke(); rr(gap / 2, -h / 2, w, h, s * 0.08); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(-gap / 2, -h * 0.15); ctx.lineTo(gap / 2, -h * 0.15); ctx.stroke();
   ctx.restore();
@@ -435,9 +439,10 @@ function makeSplat(kind, size) {
   for (let i = 0; i < 5; i++) s.seeds.push([rnd(-0.45, 0.45), rnd(-0.45, 0.45)]);
   return s;
 }
+let baseAlpha = 1;
 function drawSplat(s, x, y) {
   const r = s.size * R;
-  const a = s.wall ? clamp(1 - (s.age - 3) / 2, 0, 1) : 1;
+  const a = (s.wall ? clamp(1 - (s.age - 3) / 2, 0, 1) : 1) * baseAlpha;
   if (a <= 0) return;
   ctx.globalAlpha = a;
   const col = SPLAT_COL[s.kind] || SPLAT_COL.tomato;
@@ -448,12 +453,13 @@ function drawSplat(s, x, y) {
   ctx.fillStyle = s.kind === 'golden' ? '#fff8c0' : '#f7d27a';
   if (s.kind !== 'secret') s.seeds.forEach(p => ell(x + p[0] * r, y + p[1] * r, r * 0.06, r * 0.04));
   ctx.fillStyle = 'rgba(255,255,255,.45)'; ell(x - r * 0.3, y - r * 0.3, r * 0.12, r * 0.07);
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = baseAlpha;
 }
 function curExpr(c) { return c.exprT > 0 ? c.expr : 'idle'; }
 function drawChar(c) {
   const expr = curExpr(c), fy = R * 3.25;
   const x = c.x + (Math.random() - 0.5) * c.shake * R * 0.22, y = c.y + (Math.random() - 0.5) * c.shake * R * 0.12;
+  ctx.globalAlpha = baseAlpha;
   ctx.fillStyle = 'rgba(80,30,20,.2)'; ell(c.x, c.y + fy, R * 1.1, R * 0.15);
   ctx.save(); ctx.translate(x, y + fy); ctx.rotate(c.tilt);
   const sq = c.squash * Math.cos((1 - c.squash) * 18);
@@ -468,6 +474,40 @@ function drawChar(c) {
     ctx.fillText(String(c.num), 0, R * 1.62 + 1);
   }
   ctx.restore();
+  ctx.globalAlpha = 1;
+}
+function drawTeleportPads() {
+  if (!L || L.mode !== 'teleport') return;
+  L.spots.forEach((s, i) => {
+    const fy = s.y + R * 3.25;
+    ctx.fillStyle = 'rgba(160,140,255,.35)'; ell(s.x, fy + 4, R * 1.4, R * 0.3);
+    ctx.fillStyle = '#b9a8ff'; rr(s.x - R * 1.3, fy, R * 2.6, 8, 4); ctx.fill();
+    if (i === L.tpNext) {
+      const k = 1 - clamp(L.tpT / 0.7, 0, 1);
+      ctx.strokeStyle = `rgba(232,50,44,${0.5 + k * 0.5})`; ctx.lineWidth = 3 + k * 3;
+      ctx.beginPath(); ctx.ellipse(s.x, s.y + R * 1.1, R * (2.2 - k * 0.7), R * (2.6 - k * 0.8), 0, 0, TAU); ctx.stroke();
+      ctx.fillStyle = `rgba(232,50,44,${0.08 + k * 0.12})`; ctx.beginPath(); ctx.ellipse(s.x, s.y + R * 1.1, R * 1.5, R * 1.8, 0, 0, TAU); ctx.fill();
+    }
+  });
+}
+function drawInvisibleBoss() {
+  const axis = L.feet + 10;
+  // відображення в озері — добре видно
+  ctx.save();
+  ctx.beginPath(); ctx.rect(-60, axis, WW + 120, GROUND - axis); ctx.clip();
+  ctx.translate(0, 2 * axis); ctx.scale(1, -1);
+  baseAlpha = 0.6; drawChar(ch); baseAlpha = 1;
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2;
+  for (let k = 0; k < 7; k++) { const yy = axis + 18 + k * 20, xx = ((time * 26 + k * 61) % 440) - 20; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + 26, yy); ctx.stroke(); }
+  // сам бос — майже невидимий (видно лише при влучанні): малюємо на окремому полотні й накладаємо з прозорістю
+  const flick = Math.sin(L.t * 6.3) > 0.985 ? 0.15 : 0;
+  const alpha = L.reveal > 0 ? 1 : 0.035 + flick;
+  if (ghostCv.width !== cv.width || ghostCv.height !== cv.height) { ghostCv.width = cv.width; ghostCv.height = cv.height; }
+  ghostCtx.setTransform(1, 0, 0, 1, 0, 0); ghostCtx.clearRect(0, 0, ghostCv.width, ghostCv.height);
+  ghostCtx.setTransform(mainCtx.getTransform());
+  ctx = ghostCtx; drawChar(ch); ctx = mainCtx;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = alpha; ctx.drawImage(ghostCv, 0, 0); ctx.restore();
 }
 function onCharAt(c, px, py, pad) {
   pad = pad || 0;
@@ -545,7 +585,7 @@ let drag = null, cooldown = 0, endTimer = 0, flash = 0;
 
 function startLevel(i) {
   lvIdx = i; const D = LEVELS[i];
-  L = { D, ammo: D.ammo, lives: 3, phase: 0, phits: 0, totalHits: 0, t: 0, done: false, busy: false, lastAct: 0, transT: 0, puzzleT: 0 };
+  L = { D, ammo: D.ammo, lives: 3, phase: 0, phits: 0, totalHits: 0, t: 0, done: false, busy: false, lastAct: 0, transT: 0, puzzleT: 0, timeLeft: D.timeLimit };
   projs.length = 0; parts.length = 0; wallSplats.length = 0; bubble = null; drag = null; cooldown = 0; endTimer = 0;
   setupPhase();
   state = 'play';
@@ -581,9 +621,17 @@ function setupPhase() {
       break;
     }
     case 'order': feet = 380; ch.x = 200; L.plat = { x: 200, w: 270 }; L.shield = true; makeBalloons(P); if (P.timer) L.orderT = P.timer; break;
-    case 'clones': feet = 400; L.plat = { x: 200, w: 370 }; makeClones(); break;
+    case 'clones': feet = 400; L.plat = { x: 200, w: 370 }; makeClones(); if (P.windMax) L.windOn = true; break;
+    case 'carousel': feet = 360; ch.x = 200; L.plat = { x: 200, w: 200 }; break;
+    case 'teleport': {
+      L.spots = [{ x: 80, y: 250 }, { x: 200, y: 200 }, { x: 320, y: 250 }, { x: 110, y: 390 }, { x: 290, y: 390 }];
+      L.tpCur = Math.floor(Math.random() * 5); L.tpNext = null; L.tpT = P.every;
+      ch.x = L.spots[L.tpCur].x; ch.y = L.spots[L.tpCur].y; feet = ch.y + R * 3.25;
+      break;
+    }
+    case 'invisible': feet = 330; ch.x = 200; L.plat = { x: 200, w: 380 }; L.reveal = 0.8; break;
   }
-  L.feet = feet; ch.y = feet - R * 3.25;
+  L.feet = feet; if (P.mode !== 'teleport') ch.y = feet - R * 3.25;
   if (L.plat) L.plat.y = feet;
   if (L.clones) L.clones.forEach(c => c.y = ch.y);
 }
@@ -670,14 +718,41 @@ function updateLevel(dt) {
         else if (Math.ceil(L.orderT) !== before) updateHud();
       }
       break;
+    case 'carousel': {
+      ch.x = 200 + Math.sin(t * 0.5) * 50;
+      const cx = ch.x, cy = ch.y + R * 1.1;
+      L.segs = P.rings.map(g => {
+        const a = g.ph + t * g.sp, mx = cx + Math.cos(a) * R * g.r, my = cy + Math.sin(a) * R * g.r * 1.15;
+        const tx = -Math.sin(a), ty = Math.cos(a), hl = R * g.len / 2;
+        return { x1: mx - tx * hl, y1: my - ty * hl, x2: mx + tx * hl, y2: my + ty * hl, type: 'mirror', held: true };
+      });
+      break;
+    }
+    case 'teleport': {
+      if (L.busy) break;
+      L.tpT -= dt;
+      if (L.tpT < 0.7 && L.tpNext === null) { let n; do { n = Math.floor(Math.random() * L.spots.length); } while (n === L.tpCur); L.tpNext = n; }
+      if (L.tpT <= 0) {
+        burst(ch.x, ch.y + R, ['#c7b8ff', '#ffffff', '#ffd6f5'], 18, true);
+        L.tpCur = L.tpNext; L.tpNext = null; ch.x = L.spots[L.tpCur].x; ch.y = L.spots[L.tpCur].y;
+        burst(ch.x, ch.y + R, ['#c7b8ff', '#ffffff', '#ffd6f5'], 18, true); SND.swap();
+        L.tpT = P.every * rnd(0.85, 1.1);
+      }
+      break;
+    }
+    case 'invisible':
+      ch.x = 200 + Math.sin(t * 0.8) * 110 + Math.sin(t * 1.9) * 30;
+      if (L.reveal > 0) L.reveal -= dt;
+      break;
     case 'clones': {
+      if (L.windOn) updateWind(dt);
       if (!L.busy) {
         L.shufT -= dt;
         if (L.shufT <= 0) {
           const a = Math.floor(Math.random() * 3); let b = (a + 1 + Math.floor(Math.random() * 2)) % 3;
           const ca = L.clones.find(c => c.slot === a), cb = L.clones.find(c => c.slot === b);
           ca.slot = b; cb.slot = a; SND.swap();
-          L.shufT = Math.max(1.6, 2.6 - L.round * 0.35);
+          L.shufT = P.fast ? Math.max(1.1, 1.9 - L.round * 0.3) : Math.max(1.6, 2.6 - L.round * 0.35);
         }
       }
       L.clones.forEach((c, i) => {
@@ -756,7 +831,7 @@ function stepProj(p, dt) {
 }
 function kindOf(p) { return p.secret ? 'secret' : p.golden ? 'golden' : 'tomato'; }
 function miss() {
-  if (!L.done && !L.busy && Math.random() < 0.3 && !L.clones) { sayPick(CONFIG.phrases.miss, 1.4); setExpr('cool', 0.8); }
+  if (!L.done && !L.busy && Math.random() < 0.3 && !L.clones && L.mode !== 'invisible') { sayPick(CONFIG.phrases.miss, 1.4); setExpr('cool', 0.8); }
   return 'gone';
 }
 function scoreHit(p, c) {
@@ -768,6 +843,7 @@ function scoreHit(p, c) {
 function hitChar(p) {
   if (L.busy || L.done) return;
   scoreHit(p, ch); SND.good(Math.min(L.phits, 4));
+  if (L.mode === 'invisible') L.reveal = 0.7;
   const gain = p.golden ? 2 : 1;
   L.phits += gain; L.totalHits += gain;
   if (p.golden) goldenHit();
@@ -895,7 +971,7 @@ function describeEvent(ev) {
     case 'open': return '📱 відкрила гру';
     case 'level_start': return `▶️ почала ${lvlName(ev.lvl)}`;
     case 'level_win': return `✅ пройшла ${lvlName(ev.lvl)} ${st(ev.stars)} (🍅${ev.ammo} ❤️${ev.lives})`;
-    case 'level_lose': return `❌ програла ${lvlName(ev.lvl)}${ev.phase > 1 ? ` на фазі ${ev.phase}` : ''}: ${ev.reason === 'lives' ? 'життя' : 'помідори'} скінчились`;
+    case 'level_lose': return `❌ програла ${lvlName(ev.lvl)}${ev.phase > 1 ? ` на фазі ${ev.phase}` : ''}: ${ev.reason === 'lives' ? 'життя скінчились' : ev.reason === 'time' ? 'час вийшов' : 'помідори скінчились'}`;
     case 'boss_phase': return `👑 бос: фаза ${ev.phase}`;
     case 'game_complete': return '🏆 пройшла всю гру!';
   }
@@ -949,8 +1025,8 @@ function showIntro(i) {
   $('iNum').textContent = D.boss ? 'Фінальний бос' : `Рівень ${i + 1}`;
   $('iName').textContent = D.name; $('iDesc').textContent = D.desc;
   const g = $('iGoal'); g.innerHTML = '';
-  const goalTxt = D.boss ? `🎯 ${D.phases.length} фази` : `🎯 ${D.phases[0].goal} влуч.`;
-  [goalTxt, `🍅 ${D.ammo}`, '❤️ 3'].forEach(t => { const s = document.createElement('span'); s.textContent = t; g.appendChild(s); });
+  const chips = D.boss ? [`🎯 ${D.phases.length} фази`, `⏱ ${Math.floor(D.timeLimit / 60)}:${String(D.timeLimit % 60).padStart(2, '0')}`, `🍅 ${D.ammo}`, '❤️ 3'] : [`🎯 ${D.phases[0].goal} влуч.`, `🍅 ${D.ammo}`, '❤️ 3'];
+  chips.forEach(t => { const s = document.createElement('span'); s.textContent = t; g.appendChild(s); });
   $('iGo').onclick = () => { initAudio(); startLevel(i); };
   showOnly('intro');
 }
@@ -978,8 +1054,9 @@ function showResult() {
     $('rNext').onclick = () => showIntro(lvIdx + 1);
   } else {
     SND.lose(); buzz('bad');
-    track('level_lose', { lvl: lvIdx + 1, reason: L.lives <= 0 ? 'lives' : 'ammo', phase: L.phase + 1 });
-    $('rTitle').textContent = L.lives <= 0 ? 'Життя закінчились 💔' : 'Помідори закінчились 🍅';
+    const reason = L.lives <= 0 ? 'lives' : L.reason === 'time' ? 'time' : 'ammo';
+    track('level_lose', { lvl: lvIdx + 1, reason, phase: L.phase + 1 });
+    $('rTitle').textContent = reason === 'lives' ? 'Життя закінчились 💔' : reason === 'time' ? 'Час вийшов ⏱' : 'Помідори закінчились 🍅';
     $('rStars').textContent = '☆☆☆';
     $('rText').textContent = pick(CONFIG.phrases.lose);
     $('rNext').classList.add('hidden');
@@ -1000,7 +1077,9 @@ function showFinal() {
   showOnly('final');
 }
 function taskText() {
-  const g = L.pgoal, h = Math.min(L.phits, g), pre = L.D.boss ? `👑 Фаза ${L.phase + 1}/${L.D.phases.length} · ` : '';
+  const g = L.pgoal, h = Math.min(L.phits, g);
+  const tl = L.timeLeft !== undefined ? ` · ⏱ ${Math.floor(Math.ceil(L.timeLeft) / 60)}:${String(Math.ceil(L.timeLeft) % 60).padStart(2, '0')}` : '';
+  const pre = L.D.boss ? `👑 Фаза ${L.phase + 1}/${L.D.phases.length}${tl} · ` : '';
   switch (L.mode) {
     case 'static': return `${pre}🎯 Влуч у мене ${g} разів. Тягни палець НАЗАД від цілі і відпускай`;
     case 'wind': return `${pre}🌬️ Влуч ${g} разів. Вітер (стрілка вгорі) зносить помідор — цілься з поправкою`;
@@ -1011,6 +1090,9 @@ function taskText() {
       ? `${pre}🎈 Збий кульки від найменшої відповіді до найбільшої (${L.next}/${L.order.length})${L.P.timer ? ` · ⏱ ${Math.max(0, Math.ceil(L.orderT))} с` : ''}`
       : `${pre}🎯 Купол зник! Влуч у мене ${g} рази`;
     case 'clones': return `${pre}🧩 Правду каже лише справжній — вирахуй його й влуч (${h}/${g}). Копія = мінус життя`;
+    case 'carousel': return `${pre}🎠 Навколо мене крутяться дзеркала — прокидай у просвіт між ними (${h}/${g})`;
+    case 'teleport': return `${pre}✨ Я телепортуюсь. Кидай туди, де спалахне червоне коло — наперед! (${h}/${g})`;
+    case 'invisible': return `${pre}👻 Справжнє его невидиме. Дивись на відображення в озері й влуч у справжнього (${h}/${g})`;
   }
   return '';
 }
@@ -1021,7 +1103,9 @@ function updateHud(force) {
   te.textContent = taskText();
   if (force || key !== lastTaskKey) { te.classList.remove('pulse'); void te.offsetWidth; te.classList.add('pulse'); lastTaskKey = key; }
   te.classList.toggle('hidden', state !== 'play');
-  $('hInfo').textContent = (L.D.boss ? `👑 Ф${L.phase + 1}/${L.D.phases.length}` : `Рів. ${lvIdx + 1}`) + ` · 🎯 ${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
+  $('hInfo').textContent = L.D.boss
+    ? `👑 Ф${L.phase + 1}/${L.D.phases.length} · ⏱${Math.floor(Math.ceil(L.timeLeft) / 60)}:${String(Math.ceil(L.timeLeft) % 60).padStart(2, '0')}`
+    : `Рів. ${lvIdx + 1} · 🎯 ${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
   $('hAmmo').textContent = `${useSecret ? CONFIG.secretWeapon.emoji : '🍅'}${L.ammo} ${'❤️'.repeat(Math.max(0, L.lives))}${'🤍'.repeat(3 - Math.max(0, L.lives))}`;
   $('hSecret').classList.toggle('hidden', !secretUnlocked);
   $('hSecret').classList.toggle('on', useSecret);
@@ -1065,7 +1149,7 @@ function drawBackground() {
   ctx.setTransform(DPR * S, 0, 0, DPR * S, DPR * OX, DPR * OY);
   ctx.fillStyle = 'rgba(255,255,255,.5)';
   for (let y = -OY / S, row = 0; y < WH + OY / S; y += 36, row++) for (let x = -OX / S + (row % 2) * 18; x < WW + OX / S; x += 36) circ(x, y, 2.5);
-  if (L && L.mode === 'clones') {
+  if (L && (L.mode === 'clones' || L.mode === 'invisible')) {
     // озеро
     const lg = ctx.createLinearGradient(0, L.feet + 14, 0, GROUND);
     lg.addColorStop(0, '#9fd6ff'); lg.addColorStop(1, '#5fa8e8');
@@ -1222,7 +1306,10 @@ function render() {
     drawWind();
     drawStatements();
     wallSplats.filter(s => s.y < GROUND - 5).forEach(s => drawSplat(s, s.x, s.y));
-    if (L.clones) L.clones.forEach(drawChar); else drawChar(ch);
+    drawTeleportPads();
+    if (L.clones) L.clones.forEach(c => drawChar(c));
+    else if (L.mode === 'invisible') drawInvisibleBoss();
+    else drawChar(ch);
     drawShield();
     drawSegs();
     drawGapHint();
@@ -1256,7 +1343,13 @@ function update(dt) {
       if (res === 'gone' || p.age > 8) { const k = projs.indexOf(p); if (k >= 0) projs.splice(k, 1); }
     }
     checkOutOfAmmo();
-    if (!L.done && !L.busy && L.t - L.lastAct > 9 && !bubble && !L.clones) { sayPick(CONFIG.phrases.idle); L.lastAct = L.t; }
+    if (!L.done && !L.busy && L.t - L.lastAct > 9 && !bubble && !L.clones && L.mode !== 'invisible') { sayPick(CONFIG.phrases.idle); L.lastAct = L.t; }
+    // таймер боса
+    if (L.timeLeft !== undefined && !L.done && !L.busy) {
+      const before = Math.ceil(L.timeLeft); L.timeLeft -= dt;
+      if (Math.ceil(L.timeLeft) !== before) { updateHud(); if (L.timeLeft <= 10 && L.timeLeft > 0) tn(880, 880, 0.06, 0.08, 'square'); }
+      if (L.timeLeft <= 0) { L.timeLeft = 0; L.done = true; L.win = false; L.reason = 'time'; endTimer = 0.8; SND.err(); }
+    }
     if (L.done && endTimer > 0) { endTimer -= dt; if (endTimer <= 0) showResult(); }
   }
   for (let i = parts.length - 1; i >= 0; i--) {
