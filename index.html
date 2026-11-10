@@ -57,6 +57,12 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 .cp-top{font-size:13px;font-weight:900;letter-spacing:3px;color:#e8322c}
 .cp-prize{font-size:22px;font-weight:900;margin:8px 0 6px;line-height:1.2}
 .cp-meta{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#8a6a60;border-top:1px dashed #f0ddd5;padding-top:8px;margin-top:10px}
+.cp-opts{display:flex;gap:8px;justify-content:center;margin:6px 0 4px}
+.cp-opt{flex:1;padding:12px 4px;border-radius:14px;border:2px solid #f0ddd5;background:#fff;font-family:inherit;font-weight:800;font-size:15px;color:var(--ink);cursor:pointer;box-shadow:0 3px 0 #e6cfc6}
+.cp-opt.on{border-color:#e8322c;background:#fff0ec;box-shadow:0 3px 0 #e8322c;transform:translateY(-2px)}
+.cp-opt:disabled{opacity:.45}
+.cp-opt.on:disabled{opacity:1}
+#cpGo:disabled{opacity:.5}
 .cp-stamp{display:inline-block;border:3px solid #1a9b4b;color:#1a9b4b;font-weight:900;font-size:20px;padding:4px 12px;border-radius:10px;transform:rotate(-8deg);margin:8px 0}
 .btn{display:block;width:100%;padding:14px;border:none;border-radius:16px;background:var(--accent);color:#fff;font-size:18px;font-weight:800;text-decoration:none;margin-top:10px;font-family:inherit;box-shadow:0 4px 0 #b11f1a;cursor:pointer}
 .btn:active{transform:translateY(2px);box-shadow:0 2px 0 #b11f1a}
@@ -141,6 +147,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
   <div class="cp-top">🎟 КУПОН</div>
   <div class="cp-prize" id="cpPrize"></div>
   <p id="cpText"></p>
+  <div class="cp-opts" id="cpOpts"></div>
   <div id="cpStamp" class="cp-stamp hidden">АКТИВОВАНО ✅</div>
   <button class="btn" id="cpGo">Активувати</button>
   <button class="btn ghost hidden" id="cpNext">Далі ➜</button>
@@ -159,7 +166,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-5';
+const BUILD = '2026-11-10-6';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -178,8 +185,9 @@ const CONFIG = {
   greeting: 'Привіт, Юстино 👋',
   finalTitle: 'Ну що, нарциско, полегшало? 😏',
   // Фінал після боса: 'cutscene' — катсцена «Его розбите» з кнопками; 'coupon' — купон; 'both' — спершу катсцена, потім купон
-  ending: 'cutscene',
-  coupon: { prize: 'Одна кава, прогулянка або кіно — на твій вибір', days: 14 },
+  ending: 'both',
+  coupon: { prize: 'Обери свою нагороду', days: 14,
+    options: [['coffee', '☕ Кава'], ['walk', '🚶 Прогулянка'], ['movie', '🎬 Кіно']] },
   finalMessage: '',
   telegram: '',                     // юзернейм БЕЗ @ для кнопки у фіналі (порожньо = без кнопки)
   telegramButton: 'Написати йому 💬',
@@ -216,25 +224,25 @@ const CONFIG = {
 const LEVELS = [
   { name: 'Розминка', ammo: 12, preview: 0.55,
     phases: [{ mode: 'static', goal: 5 }],
-    desc: 'Тягни палець назад і відпускай — як рогатка. Чим довше тягнеш, тим сильніший кидок.' },
+    desc: 'Тягни палець назад і відпускай, як рогатку.' },
   { name: 'Вітер', ammo: 13, preview: 0.4,
     phases: [{ mode: 'wind', goal: 5, windMax: 260, speed: 0.8 }],
-    desc: 'Вітер змінюється кожні кілька секунд, а я рухаюсь. Дивись на стрілку вгорі й бери поправку.' },
+    desc: 'Вітер зносить помідор — дивись на стрілку вгорі.' },
   { name: 'Дзеркальний щит', ammo: 13, preview: 0.36,
     phases: [{ mode: 'mirror', goal: 5, mspeed: 1.1 }],
-    desc: 'У мене дзеркало 🪞 Влучиш у нього — помідор полетить назад у тебе (мінус життя). Лови момент, коли воно збоку.' },
+    desc: 'Не влуч у дзеркало 🪞 — помідор полетить назад у тебе.' },
   { name: 'Рикошет', ammo: 14, preview: 0.32,
     phases: [{ mode: 'cave', goal: 3 }],
-    desc: 'Я сховався в печеру. Напряму не дістанеш — тільки через похиле дзеркало. Кидай високо у щілину біля стрілки.' },
+    desc: 'Я в печері. Кидай у щілину біля стрілки — дзеркало відіб’є помідор у мене.' },
   { name: 'Порядок', ammo: 22, preview: 0.3,
     phases: [{ mode: 'order', goal: 3, amp: [26, 40], sp: [0.9, 1.3], br: 19 }],
-    desc: 'Мене захищає купол. Збий 5 кульок від найменшої відповіді до найбільшої — і купол зникне. Кульки швидко літають, тож треба ще й влучити. Помилка — кульки повертаються.' },
+    desc: 'Збий кульки від найменшої відповіді до найбільшої — і купол зникне.' },
   { name: 'Озеро Нарциса', ammo: 16, preview: 0.28,
     phases: [{ mode: 'clones', goal: 3 }],
-    desc: 'Біля озера троє мене. Двоє — відображення, і вони завжди брешуть. Справжній — єдиний, хто каже правду. Прочитай, що кажуть усі троє, вирахуй справжнього й влуч. Вони ще й міняються місцями. Влучиш у копію — мінус життя.' },
-  { name: 'Бос: Его', ammo: 75, preview: 0, boss: true, timeLimit: 210,
+    desc: 'Правду каже лише справжній, копії брешуть. Вирахуй його й влуч.' },
+  { name: 'Бос: Его', ammo: 66, preview: 0, boss: true, timeLimit: 185,
     phases: [{ mode: 'fury', goal: 10 }],
-    desc: 'Фінальний бос — Его, володар дзеркал 👑 Один довгий бій: 10 влучань за 3:30, без підказки траєкторії. Він телепортується, ховається за дзеркалами, читає твої кидки й ухиляється, а ще кидає в тебе уламки — збивай їх помідором. Що менше в нього здоров’я, то він лютіший. Попадання заряджають «🌧️ Град». Готуйся до багатьох спроб 💀' },
+    desc: 'Він телепортується, ухиляється й кидає уламки — збивай їх. Готуйся до багатьох спроб 💀' },
 ];
 
 /* ============================================================ */
@@ -787,12 +795,12 @@ function updateWind(dt) {
 /* --- бос: стадії люті (одна фаза, що ускладнюється зі зниженням здоров'я) --- */
 const RING = (r, sp, ph, len) => ({ r, sp, ph, len });
 const BOSS_STAGES = [
-  { name: '', every: 2.1, warn: 0.65, smart: 0.3, dodge: 0.45, dodgeCd: 1.45, attack: 4.2, windMax: 70,
-    rings: [RING(2.1, 1.5, 0, 2.6), RING(2.1, 1.5, Math.PI, 2.6)] },
-  { name: '😤 Его злиться!', every: 1.7, warn: 0.6, smart: 0.38, dodge: 0.5, dodgeCd: 1.3, attack: 3.4, windMax: 110,
-    rings: [RING(2.1, 1.7, 0, 2.6), RING(2.1, 1.7, Math.PI, 2.6), RING(3.0, -1.1, 1, 3.3)] },
-  { name: '🔥 ЛЮТЬ!', every: 1.45, warn: 0.55, smart: 0.42, dodge: 0.55, dodgeCd: 1.2, attack: 2.6, windMax: 140, ghost: true,
-    rings: [RING(2.1, 1.9, 0, 2.6), RING(2.1, 1.9, Math.PI, 2.6), RING(3.0, -1.3, 1, 3.3), RING(3.0, -1.3, 1 + Math.PI, 3.3)] },
+  { name: '', every: 1.83, warn: 0.58, smart: 0.35, dodge: 0.52, dodgeCd: 1.26, attack: 3.65, windMax: 80,
+    rings: [RING(2.1, 1.65, 0, 2.65), RING(2.1, 1.65, Math.PI, 2.65)] },
+  { name: '😤 Его злиться!', every: 1.48, warn: 0.54, smart: 0.44, dodge: 0.58, dodgeCd: 1.13, attack: 2.95, windMax: 125,
+    rings: [RING(2.1, 1.87, 0, 2.65), RING(2.1, 1.87, Math.PI, 2.65), RING(3.0, -1.2, 1, 3.35)] },
+  { name: '🔥 ЛЮТЬ!', every: 1.26, warn: 0.5, smart: 0.48, dodge: 0.63, dodgeCd: 1.04, attack: 2.25, windMax: 160, ghost: true,
+    rings: [RING(2.1, 2.1, 0, 2.65), RING(2.1, 2.1, Math.PI, 2.65), RING(3.0, -1.43, 1, 3.35), RING(3.0, -1.43, 1 + Math.PI, 3.35)] },
 ];
 function bossStageIdx() { const k = L.phits / L.pgoal; return k >= 0.75 ? 2 : k >= 0.5 ? 1 : 0; }
 function applyStage(s, loud) {
@@ -1208,7 +1216,7 @@ function describeEvent(ev) {
     case 'boss_phase': return `👑 бос: фаза ${ev.phase}`;
     case 'game_complete': return `🏆 пройшла всю гру!${ev.deaths ? ` (смертей на босі: ${ev.deaths})` : ''}`;
     case 'final_answer': return ev.a === 'yes' ? '💬 відповіла «Так 😏»' : '💬 відповіла «Подумаю…»';
-    case 'coupon': return '🎟 активувала купон';
+    case 'coupon': return `🎟 активувала купон${ev.choice ? ': ' + ({ coffee: '☕ кава', walk: '🚶 прогулянка', movie: '🎬 кіно' }[ev.choice] || ev.choice) : ''}`;
   }
   return ev.e;
 }
@@ -1410,11 +1418,27 @@ function showCoupon() {
   $('cpNum').textContent = '№ 0001';
   $('cpDate').textContent = 'Дійсний до ' + d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
   $('cpStamp').classList.add('hidden'); $('cpGo').classList.remove('hidden'); $('cpNext').classList.add('hidden');
+  cpChoice = null; $('cpGo').disabled = true; $('cpGo').textContent = 'Спершу обери 👆';
+  const box = $('cpOpts'); box.innerHTML = '';
+  CONFIG.coupon.options.forEach(([id, label]) => {
+    const b = document.createElement('button'); b.className = 'cp-opt'; b.textContent = label;
+    b.addEventListener('click', () => {
+      if ($('cpGo').classList.contains('hidden')) return;
+      cpChoice = id; box.querySelectorAll('.cp-opt').forEach(x => x.classList.toggle('on', x === b));
+      $('cpGo').disabled = false; $('cpGo').textContent = 'Активувати 🎟'; SND.pop(); buzz('light');
+    });
+    box.appendChild(b);
+  });
   confetti();
   showOnly('coupon');
 }
+let cpChoice = null;
 $('cpGo').addEventListener('click', () => {
-  track('coupon');
+  if (!cpChoice) return;
+  const label = (CONFIG.coupon.options.find(o => o[0] === cpChoice) || [])[1] || '';
+  track('coupon', { choice: cpChoice });
+  $('cpOpts').querySelectorAll('.cp-opt').forEach(x => x.disabled = true);
+  $('cpPrize').textContent = label;
   $('cpStamp').classList.remove('hidden'); $('cpGo').classList.add('hidden'); $('cpNext').classList.remove('hidden');
   $('cpText').textContent = 'Я вже знаю 😉 Напиши, коли тобі зручно.';
   SND.win(); buzz('win'); confetti();
@@ -1679,7 +1703,7 @@ function render() {
     drawTeleportPads();
     if (L.clones) L.clones.forEach(c => drawChar(c));
     else if (L.mode === 'invisible') drawInvisibleBoss();
-    else if (L.P && L.P.ghost) drawGhost(L.reveal > 0 ? 1 : 0.48 + Math.sin(L.t * 9) * 0.08);
+    else if (L.P && L.P.ghost) drawGhost(L.reveal > 0 ? 1 : 0.41 + Math.sin(L.t * 9) * 0.08);
     else drawChar(ch);
     drawBossBar();
     drawShield();
