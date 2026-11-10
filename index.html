@@ -72,6 +72,10 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 .cp-nav span{font-weight:800;font-size:14px;color:#5a3d36}
 .cp-arrow{width:42px;height:34px;border-radius:12px;border:2px solid #f0ddd5;background:#fff;font-family:inherit;font-size:22px;font-weight:900;line-height:1;color:var(--ink);cursor:pointer;box-shadow:0 2px 0 #e6cfc6;padding:0}
 .cp-arrow:disabled{opacity:.3}
+.cp-custom{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:6px 6px 6px 12px;border:2px dashed #f0ddd5;border-radius:14px;background:#fff;font-weight:800;font-size:14px;min-height:44px}
+.cp-custom.on{border-style:solid;border-color:#e8322c;background:#fff0ec}
+.cp-custom input{font-family:inherit;font-size:15px;font-weight:800;color:var(--ink);border:1px solid #f0ddd5;border-radius:10px;background:#fffaf6;padding:6px 8px;min-width:0;max-width:60%;-webkit-user-select:auto;user-select:auto}
+.cp-custom input:disabled{opacity:.6}
 .cp-day{height:54px;gap:2px}
 .cp-day .wd{font-size:11px;font-weight:700;color:#8a6a60}
 .cp-day .dn{font-size:17px;font-weight:900;line-height:1}
@@ -168,7 +172,9 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
     <div class="cp-h">Коли? 📅</div>
     <div class="cp-nav"><button class="cp-arrow" id="cpPrev" aria-label="Попередній тиждень">‹</button><span id="cpRange"></span><button class="cp-arrow" id="cpFwd" aria-label="Наступний тиждень">›</button></div>
     <div class="cp-days" id="cpDays"></div>
+    <label class="cp-custom" id="cpDateBox"><span>📅 Інша дата</span><input type="date" id="cpDateIn"></label>
     <div class="cp-times" id="cpTimes"></div>
+    <label class="cp-custom" id="cpTimeBox"><span>🕐 Свій час</span><input type="time" id="cpTimeIn" step="300"></label>
   </div>
   <div id="cpStamp" class="cp-stamp hidden">АКТИВОВАНО ✅</div>
   <button class="btn" id="cpGo">Активувати</button>
@@ -188,7 +194,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-11';
+const BUILD = '2026-11-10-12';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -1459,6 +1465,8 @@ function showCoupon() {
   $('cpStamp').classList.add('hidden'); $('cpGo').classList.remove('hidden'); $('cpNext').classList.add('hidden');
   cp = { opt: null, day: null, time: null, done: false };
   $('cpWhen').classList.add('hidden');
+  ['cpDateIn', 'cpTimeIn'].forEach(id => { $(id).value = ''; $(id).disabled = false; });
+  $('cpDateBox').classList.remove('on'); $('cpTimeBox').classList.remove('on');
   const box = $('cpOpts'); box.innerHTML = '';
   CONFIG.coupon.options.forEach(o => {
     const b = chip('cp-opt', [['ico', o.ico], ['lbl', o.label]]);
@@ -1483,14 +1491,40 @@ function pickOn(box, b) { box.querySelectorAll('.cp-chip').forEach(x => x.classL
 function buildWhen() {
   $('cpWhen').classList.remove('hidden');
   renderDays();
+  // межі для «Іншої дати»: від першого доступного дня до +2 місяців
+  const first = couponDays()[0], last = new Date(first); last.setDate(first.getDate() + 60);
+  $('cpDateIn').min = isoOf(first); $('cpDateIn').max = isoOf(last);
   const times = $('cpTimes'); times.innerHTML = '';
+  $('cpTimeIn').value = ''; $('cpTimeBox').classList.remove('on');
   cp.opt.times.forEach(tm => {
     const b = chip('cp-time', [['tm', tm]]);
     if (cp.time === tm) b.classList.add('on');
-    b.addEventListener('click', () => { if (cp.done) return; cp.time = tm; pickOn(times, b); SND.pop(); cpRefresh(); });
+    b.addEventListener('click', () => {
+      if (cp.done) return; cp.time = tm; pickOn(times, b);
+      $('cpTimeIn').value = ''; $('cpTimeBox').classList.remove('on');
+      SND.pop(); cpRefresh();
+    });
     times.appendChild(b);
   });
 }
+function isoOf(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+$('cpDateIn').addEventListener('change', e => {
+  const v = e.target.value;
+  if (cp.done || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+  if (v < e.target.min || v > e.target.max) {
+    toast('Обери дату з доступного проміжку 📅');
+    e.target.value = $('cpDateBox').classList.contains('on') && cp.day ? cp.day.iso : '';
+    return;
+  }
+  cp.day = { iso: v, date: new Date(v + 'T12:00:00') };
+  $('cpDateBox').classList.add('on'); renderDays(); SND.pop(); cpRefresh();
+});
+$('cpTimeIn').addEventListener('change', e => {
+  const v = (e.target.value || '').slice(0, 5);
+  if (cp.done || !/^\d{2}:\d{2}$/.test(v)) return;
+  cp.time = v; pickOn($('cpTimes'), null);
+  $('cpTimeBox').classList.add('on'); SND.pop(); cpRefresh();
+});
 // Сторінка з 7 днів; стрілки ‹ › і свайп гортають тижні
 function renderDays() {
   const n = CONFIG.coupon.pickDays || 7, pages = CONFIG.coupon.weeks || 4;
@@ -1508,7 +1542,11 @@ function renderDays() {
     const wd = d.toLocaleDateString('uk-UA', { weekday: 'short' });
     const b = chip('cp-day', [['wd', wd], ['dn', String(d.getDate())]]);
     if (cp.day && cp.day.iso === iso) b.classList.add('on');
-    b.addEventListener('click', () => { if (cp.done) return; cp.day = { iso, date: d }; pickOn(days, b); SND.pop(); cpRefresh(); });
+    b.addEventListener('click', () => {
+      if (cp.done) return; cp.day = { iso, date: d }; pickOn(days, b);
+      $('cpDateIn').value = ''; $('cpDateBox').classList.remove('on');
+      SND.pop(); cpRefresh();
+    });
     days.appendChild(b);
   }
 }
@@ -1552,7 +1590,7 @@ $('cpGo').addEventListener('click', () => {
   if (!(cp.opt && cp.day && cp.time) || cp.done) return;
   cp.done = true;
   track('coupon', { choice: cp.opt.id, day: cp.day.iso, time: cp.time });
-  document.querySelectorAll('#coupon .cp-chip, #coupon .cp-arrow').forEach(x => x.disabled = true);
+  document.querySelectorAll('#coupon .cp-chip, #coupon .cp-arrow, #coupon input').forEach(x => x.disabled = true);
   $('cpPrize').textContent = `${cp.opt.ico} ${cp.opt.label}`;
   $('cpStamp').classList.remove('hidden'); $('cpGo').classList.add('hidden'); $('cpNext').classList.remove('hidden');
   $('cpText').textContent = `${whenText()}. Я вже знаю 😉 До зустрічі!`;
