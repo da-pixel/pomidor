@@ -213,17 +213,9 @@ const LEVELS = [
   { name: 'Озеро Нарциса', ammo: 16, preview: 0.28,
     phases: [{ mode: 'clones', goal: 3 }],
     desc: 'Біля озера троє мене. Двоє — відображення, і вони завжди брешуть. Справжній — єдиний, хто каже правду. Прочитай, що кажуть усі троє, вирахуй справжнього й влуч. Вони ще й міняються місцями. Влучиш у копію — мінус життя.' },
-  { name: 'Бос: Его', ammo: 55, preview: 0, boss: true, timeLimit: 150,
-    phases: [
-      { mode: 'carousel', goal: 3, move: 0.9, dodge: 0.55, dodgeCd: 1.3,
-        rings: [{ r: 2.0, sp: 1.7, ph: 0, len: 2.8 }, { r: 2.0, sp: 1.7, ph: Math.PI, len: 2.8 }, { r: 3.0, sp: -1.15, ph: 1, len: 3.4 }, { r: 3.0, sp: -1.15, ph: 1 + Math.PI, len: 3.4 }] },
-      { mode: 'teleport', goal: 3, every: 1.35, warn: 0.5, windMax: 140, smart: 0.5 },
-      { mode: 'clones', goal: 3, fast: true, windMax: 180 },
-      { mode: 'invisible', goal: 3, dodge: 0.55, dodgeCd: 1.4 },
-      { mode: 'fury', goal: 3, every: 1.6, warn: 0.5, smart: 0.4, dodge: 0.6, dodgeCd: 1.2,
-        rings: [{ r: 2.1, sp: 2.1, ph: 0, len: 2.6 }, { r: 2.1, sp: 2.1, ph: Math.PI, len: 2.6 }] },
-    ],
-    desc: 'Фінальний бос — моє его 👑 Він читає твої кидки й ухиляється, а підказки траєкторії немає. 5 фаз за 2:30: дзеркальна карусель → телепорт → доппельгангери → невидиме его → ЛЮТЬ. Попадання заряджають суперсилу «🌧️ Град». Готуйся до багатьох спроб 💀' },
+  { name: 'Бос: Его', ammo: 60, preview: 0, boss: true, timeLimit: 180,
+    phases: [{ mode: 'fury', goal: 12 }],
+    desc: 'Фінальний бос — Его, володар дзеркал 👑 Один довгий бій: 12 влучань за 3:00, без підказки траєкторії. Він телепортується, ховається за дзеркалами, читає твої кидки й ухиляється, а ще кидає в тебе уламки — збивай їх помідором. Що менше в нього здоров’я, то він лютіший. Попадання заряджають «🌧️ Град». Готуйся до багатьох спроб 💀' },
 ];
 
 /* ============================================================ */
@@ -537,6 +529,27 @@ function drawTeleportPads() {
     }
   });
 }
+function drawGhost(alpha) {
+  if (ghostCv.width !== cv.width || ghostCv.height !== cv.height) { ghostCv.width = cv.width; ghostCv.height = cv.height; }
+  ghostCtx.setTransform(1, 0, 0, 1, 0, 0); ghostCtx.clearRect(0, 0, ghostCv.width, ghostCv.height);
+  ghostCtx.setTransform(mainCtx.getTransform());
+  ctx = ghostCtx; drawChar(ch); ctx = mainCtx;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = clamp(alpha, 0, 1); ctx.drawImage(ghostCv, 0, 0); ctx.restore();
+}
+// Смуга здоров'я боса — як у соулс-іграх
+function drawBossBar() {
+  if (!L || !L.D.boss) return;
+  const hp = clamp(1 - L.phits / L.pgoal, 0, 1), x = 30, y = 104, w = 340, h = 10;
+  L.hpShow = L.hpShow === undefined ? hp : L.hpShow + (hp - L.hpShow) * 0.06;
+  ctx.font = `900 12px ${UIFONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#2b1b17'; ctx.fillText('ЕГО, ВОЛОДАР ДЗЕРКАЛ', x, y - 5);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#8a2a20'; ctx.fillText(BOSS_STAGES[L.stage || 0].name || '', x + w, y - 5);
+  ctx.fillStyle = 'rgba(43,27,23,.75)'; rr(x - 2, y - 2, w + 4, h + 4, 4); ctx.fill();
+  ctx.fillStyle = '#f2c9a0'; rr(x, y, w * L.hpShow, h, 3); ctx.fill();
+  ctx.fillStyle = '#c0161c'; rr(x, y, w * hp, h, 3); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(x, y, w * hp, 3);
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; [0.5, 0.75].forEach(k => ctx.fillRect(x + w * (1 - k) - 1, y - 2, 2, h + 4));
+}
 function drawInvisibleBoss() {
   const axis = L.feet + 10;
   // відображення в озері — добре видно
@@ -672,7 +685,7 @@ function setupPhase() {
     case 'carousel': feet = 360; ch.x = 200; L.plat = { x: 200, w: 200 }; break;
     case 'teleport': case 'fury': {
       L.spots = [{ x: 80, y: 250 }, { x: 200, y: 200 }, { x: 320, y: 250 }, { x: 110, y: 390 }, { x: 290, y: 390 }, { x: 200, y: 330 }];
-      L.tpCur = Math.floor(Math.random() * L.spots.length); L.tpNext = null; L.tpT = P.every;
+      L.tpCur = Math.floor(Math.random() * L.spots.length); L.tpNext = null; L.tpT = (P.every || BOSS_STAGES[0].every) + 1;
       ch.x = L.spots[L.tpCur].x; ch.y = L.spots[L.tpCur].y; feet = ch.y + R * 3.25;
       if (P.windMax) L.windOn = true;
       break;
@@ -680,6 +693,8 @@ function setupPhase() {
     case 'invisible': feet = 330; ch.x = 200; L.plat = { x: 200, w: 380 }; L.reveal = 0.8; break;
   }
   L.dg = { off: 0, target: 0, t: 0, cd: 0.8 };
+  if (P.mode === 'fury' && L.D.boss) applyStage(0, false);
+  L.enemy = []; L.atkT = (L.P.attack || 0) + 1.5; L.atkWarn = false;
   L.feet = feet; if (P.mode !== 'teleport' && P.mode !== 'fury') ch.y = feet - R * 3.25;
   if (L.plat) L.plat.y = feet;
   if (L.clones) L.clones.forEach(c => c.y = ch.y);
@@ -750,6 +765,28 @@ function updateWind(dt) {
   if (L.windT <= 0) { const m = L.P.windMax; L.windTarget = Math.round(rnd(-m, m) / 20) * 20; L.windT = rnd(3, 4.5); }
   L.wind += (L.windTarget - L.wind) * Math.min(1, dt * 2.5);
 }
+/* --- бос: стадії люті (одна фаза, що ускладнюється зі зниженням здоров'я) --- */
+const RING = (r, sp, ph, len) => ({ r, sp, ph, len });
+const BOSS_STAGES = [
+  { name: '', every: 1.6, warn: 0.5, smart: 0.45, dodge: 0.65, dodgeCd: 1.1, attack: 3.2, windMax: 100,
+    rings: [RING(2.1, 1.9, 0, 2.7), RING(2.1, 1.9, Math.PI, 2.7)] },
+  { name: '😤 Его злиться!', every: 1.3, warn: 0.45, smart: 0.55, dodge: 0.72, dodgeCd: 1.0, attack: 2.6, windMax: 160,
+    rings: [RING(2.1, 2.1, 0, 2.7), RING(2.1, 2.1, Math.PI, 2.7), RING(3.0, -1.4, 1, 3.4)] },
+  { name: '🔥 ЛЮТЬ!', every: 1.1, warn: 0.4, smart: 0.6, dodge: 0.78, dodgeCd: 0.9, attack: 2.0, windMax: 200, ghost: true,
+    rings: [RING(2.1, 2.4, 0, 2.7), RING(2.1, 2.4, Math.PI, 2.7), RING(3.0, -1.6, 1, 3.4), RING(3.0, -1.6, 1 + Math.PI, 3.4)] },
+];
+function bossStageIdx() { const k = L.phits / L.pgoal; return k >= 0.75 ? 2 : k >= 0.5 ? 1 : 0; }
+function applyStage(s, loud) {
+  L.stage = s;
+  L.P = Object.assign({ mode: 'fury', goal: L.pgoal }, BOSS_STAGES[s]);
+  L.windOn = true;
+  if (loud) {
+    toast(BOSS_STAGES[s].name, 2200); SND.shield(); buzz('bad'); flash = 0.3;
+    setExpr('shock', 1.2); say(s === 2 ? 'ДОСИТЬ ІГОР 😤' : 'Ах так?!', 1.6);
+    L.enemy = []; updateHud(true);
+  }
+}
+
 /* --- бос: дзеркала, телепорт, ухиляння, град --- */
 function setRings(P) {
   const cx = ch.x, cy = ch.y + R * 1.1, t = L.t;
@@ -788,15 +825,15 @@ function bossAI() {
   for (const p of projs) {
     if (p.ai) continue;
     const h = predictHit(p);
-    if (!h || h.t > 0.55) continue;
+    if (!h || h.t > 0.65) continue;
     p.ai = true;
     if (h.t < 0.12) continue;
     if (P.smart && L.tpNext === null && Math.random() < P.smart) { L.tpNext = pickSpot(); L.tpT = Math.min(L.tpT, 0.12); continue; }
     if (P.dodge && L.dg.cd <= 0 && Math.random() < P.dodge) {
       let dir = Math.random() < 0.25 ? (Math.random() < 0.5 ? -1 : 1) : (h.x < ch.x ? 1 : -1);
       const base = ch.x - L.dg.off;
-      if (base + dir * R * 2.8 > WW - R * 1.4 || base + dir * R * 2.8 < R * 1.4) dir = -dir;
-      L.dg.target = dir * R * 2.8; L.dg.t = 0.75; L.dg.cd = P.dodgeCd || 1.2;
+      if (base + dir * R * 3.2 > WW - R * 1.4 || base + dir * R * 3.2 < R * 1.4) dir = -dir;
+      L.dg.target = dir * R * 3.2; L.dg.t = 0.8; L.dg.cd = P.dodgeCd || 1.2;
       SND.swap();
       if (L.mode !== 'invisible') { setExpr('cool', 0.7); if (Math.random() < 0.5) sayPick(CONFIG.phrases.dodge, 1.2); }
     }
@@ -808,7 +845,7 @@ function updateDodge(dt) {
   if (d.t > 0) { d.t -= dt; if (d.t <= 0) d.target = 0; }
   d.off += (d.target - d.off) * Math.min(1, dt * 14);
 }
-const POWER_MAX = 4;
+const POWER_MAX = 6;
 function chargePower() {
   if (!L.D.boss || L.hail) return;
   const was = L.power; L.power = Math.min(POWER_MAX, L.power + 1);
@@ -829,6 +866,59 @@ function hailStep(dt) {
   projs.push({ x: tx + rnd(-75, 75), y: -30, vx: rnd(-25, 25), vy: rnd(250, 380), rot: 0, spin: rnd(6, 12), golden: false, secret: false, reflected: false, age: 0, hail: true });
 }
 function hailCounts() { return !!(L.hail && L.hail.hits++ < 2); }
+
+/* --- контратака боса: дзеркальні уламки летять у рогатку, їх треба збивати --- */
+const SHARD_G = 320;
+function enemyStep(dt) {
+  const P = L.P;
+  if (P.attack && !L.busy && !L.done && !L.clones) {
+    L.atkT -= dt;
+    if (L.atkT < 0.5 && !L.atkWarn) { L.atkWarn = true; if (L.mode !== 'invisible') setExpr('shock', 0.5); tn(660, 990, 0.12, 0.12, 'square'); }
+    if (L.atkT <= 0) {
+      const x = ch.x, y = ch.y + R * 0.6, T = rnd(1.9, 2.3), tx = LAUNCH.x + rnd(-8, 8), ty = LAUNCH.y - 4;
+      L.enemy.push({ x, y, vx: (tx - x) / T, vy: (ty - y) / T - 0.5 * SHARD_G * T, rot: 0 });
+      L.atkT = P.attack * rnd(0.8, 1.15); L.atkWarn = false;
+      nz(0.25, 3000, 6000, 0.12, 'bandpass');
+      if (!L.atkTold) { L.atkTold = true; toast('⚠️ Его кидає уламки — збивай їх помідором!', 2600); }
+    }
+  }
+  for (let i = L.enemy.length - 1; i >= 0; i--) {
+    const s = L.enemy[i];
+    s.vy += SHARD_G * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.rot += dt * 7;
+    let gone = false;
+    for (let k = projs.length - 1; k >= 0; k--) {
+      const p = projs[k];
+      if (Math.hypot(p.x - s.x, p.y - s.y) < 20) {
+        projs.splice(k, 1); gone = true;
+        burst(s.x, s.y, ['#d9c7ff', '#ffffff', '#9fd6ff'], 16, true); SND.clink(); SND.good(1);
+        break;
+      }
+    }
+    if (!gone && Math.hypot(s.x - LAUNCH.x, s.y - LAUNCH.y) < 34) {
+      gone = true; L.lives--; flash = 0.4; SND.err(); buzz('bad');
+      burst(s.x, s.y, ['#d9c7ff', '#ffffff'], 20, true); wallSplat(LAUNCH.x, LAUNCH.y - 6, 'tomato', 0.9);
+      if (L.mode !== 'invisible') { setExpr('laugh', 1.2); sayPick(CONFIG.phrases.back, 1.6); }
+      updateHud(); checkEnd();
+    }
+    if (!gone && (s.y > GROUND || s.x < -40 || s.x > WW + 40)) gone = true;
+    if (gone) L.enemy.splice(i, 1);
+  }
+}
+function drawEnemy() {
+  if (!L || !L.enemy) return;
+  if (L.atkWarn && L.mode !== 'invisible') {
+    const a = 0.6 + Math.sin(time * 30) * 0.4;
+    ctx.fillStyle = `rgba(232,50,44,${a})`; ctx.font = `900 26px ${UIFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('!', ch.x + R * 1.5, ch.y - R * 1.2);
+  }
+  L.enemy.forEach(s => {
+    ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.rot);
+    ctx.shadowColor = '#a07cff'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#cdbbff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(8, 0); ctx.lineTo(0, 12); ctx.lineTo(-8, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  });
+}
 
 function updateLevel(dt) {
   L.t += dt; const t = L.t, P = L.P;
@@ -853,7 +943,9 @@ function updateLevel(dt) {
       setRings(P);
       break;
     case 'teleport': case 'fury':
+      if (L.mode === 'fury' && L.D.boss && !L.done) { const s = bossStageIdx(); if (s !== L.stage) applyStage(s, true); }
       if (L.windOn) updateWind(dt);
+      if (L.reveal > 0) L.reveal -= dt;
       tpStep(dt, P);
       ch.x = clamp(L.spots[L.tpCur].x + L.dg.off, R * 1.4, WW - R * 1.4); ch.y = L.spots[L.tpCur].y;
       if (L.mode === 'fury') setRings(P);
@@ -962,7 +1054,7 @@ function hitChar(p) {
   if (L.busy || L.done) return;
   if (p.hail && !hailCounts()) { scoreHit(p, ch); if (L.mode === 'invisible') L.reveal = 0.3; return; }
   scoreHit(p, ch); SND.good(Math.min(L.phits, 4));
-  if (L.mode === 'invisible') L.reveal = 0.7;
+  if (L.mode === 'invisible' || L.stage === 2) L.reveal = 0.7;
   if (!p.hail) chargePower();
   const gain = p.golden ? 2 : 1;
   L.phits += gain; L.totalHits += gain;
@@ -1149,7 +1241,7 @@ function showIntro(i) {
   $('iNum').textContent = D.boss ? `Фінальний бос${ATT[i] ? ` · смертей: ${ATT[i]} 💀` : ''}` : `Рівень ${i + 1}`;
   $('iName').textContent = D.name; $('iDesc').textContent = D.desc;
   const g = $('iGoal'); g.innerHTML = '';
-  const chips = D.boss ? [`🎯 ${D.phases.length} фази`, `⏱ ${Math.floor(D.timeLimit / 60)}:${String(D.timeLimit % 60).padStart(2, '0')}`, `🍅 ${D.ammo}`, '❤️ 3'] : [`🎯 ${D.phases[0].goal} влуч.`, `🍅 ${D.ammo}`, '❤️ 3'];
+  const chips = D.boss ? [`🎯 ${D.phases[0].goal}`, `⏱ ${Math.floor(D.timeLimit / 60)}:${String(D.timeLimit % 60).padStart(2, '0')}`, `🍅 ${D.ammo}`, '❤️ 3'] : [`🎯 ${D.phases[0].goal} влуч.`, `🍅 ${D.ammo}`, '❤️ 3'];
   chips.forEach(t => { const s = document.createElement('span'); s.textContent = t; g.appendChild(s); });
   $('iGo').onclick = () => { initAudio(); startLevel(i); };
   showOnly('intro');
@@ -1192,7 +1284,7 @@ function showResult() {
       const why = reason === 'lives' ? 'життя скінчились' : reason === 'time' ? 'час вийшов' : 'помідори скінчились';
       $('rTitle').textContent = 'ТИ ЗАГИНУЛА 💀';
       $('rStars').textContent = `Спроба №${ATT[lvIdx]}`;
-      $('rText').textContent = `Фаза ${L.phase + 1} з ${D.phases.length} · ${why}. ${pick(CONFIG.phrases.died)}`;
+      $('rText').textContent = `Здоров’я его: ${Math.round((1 - Math.min(L.phits, L.pgoal) / L.pgoal) * 100)}% · ${why}. ${pick(CONFIG.phrases.died)}`;
     }
   }
   $('rRetry').onclick = () => startLevel(lvIdx);
@@ -1340,7 +1432,7 @@ function taskText() {
     case 'carousel': return `${pre}🎠 Дзеркала крутяться, а я ухиляюсь. Фінт: кинь один — другий туди, куди я відскочу (${h}/${g})`;
     case 'teleport': return `${pre}✨ Телепорт: кидай у червоне коло наперед. Але я можу стрибнути раніше 😏 (${h}/${g})`;
     case 'invisible': return `${pre}👻 Я невидимий і ухиляюсь. Шукай мене за відображенням в озері (${h}/${g})`;
-    case 'fury': return `${pre}🔥 ЛЮТЬ: телепорт + дзеркала + ухиляння. Останній ривок! (${h}/${g})`;
+    case 'fury': return `👑 ⏱ ${tl.replace(' · ⏱ ', '')} · Влуч ${g} разів (${h}/${g}). Кидай у червоне коло наперед, обходь дзеркала, збивай уламки ⚠️`;
   }
   return '';
 }
@@ -1352,7 +1444,7 @@ function updateHud(force) {
   if (force || key !== lastTaskKey) { te.classList.remove('pulse'); void te.offsetWidth; te.classList.add('pulse'); lastTaskKey = key; }
   te.classList.toggle('hidden', state !== 'play');
   $('hInfo').textContent = L.D.boss
-    ? `👑 Ф${L.phase + 1}/${L.D.phases.length} · ⏱${Math.floor(Math.ceil(L.timeLeft) / 60)}:${String(Math.ceil(L.timeLeft) % 60).padStart(2, '0')}`
+    ? `⏱ ${Math.floor(Math.ceil(L.timeLeft) / 60)}:${String(Math.ceil(L.timeLeft) % 60).padStart(2, '0')}`
     : `Рів. ${lvIdx + 1} · 🎯 ${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
   $('hAmmo').textContent = `${useSecret ? CONFIG.secretWeapon.emoji : '🍅'}${L.ammo} ${'❤️'.repeat(Math.max(0, L.lives))}${'🤍'.repeat(3 - Math.max(0, L.lives))}`;
   const pw = $('hPower');
@@ -1483,7 +1575,7 @@ function drawStatements() {
 }
 function drawWind() {
   if (!L || !L.windOn) return;
-  const w = L.wind, x = 200, y = 92;
+  const w = L.wind, x = 200, y = L.D.boss ? 140 : 92;
   ctx.fillStyle = 'rgba(255,255,255,.88)'; rr(x - 70, y - 16, 140, 32, 16); ctx.fill();
   ctx.font = `800 12px ${UIFONT}`; ctx.fillStyle = '#5a3d36'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('ВІТЕР', x - 60, y);
@@ -1563,13 +1655,16 @@ function render() {
     drawTeleportPads();
     if (L.clones) L.clones.forEach(c => drawChar(c));
     else if (L.mode === 'invisible') drawInvisibleBoss();
+    else if (L.P && L.P.ghost) drawGhost(L.reveal > 0 ? 1 : 0.32 + Math.sin(L.t * 9) * 0.08);
     else drawChar(ch);
+    drawBossBar();
     drawShield();
     drawSegs();
     drawGapHint();
     drawBalloons();
     wallSplats.filter(s => s.y >= GROUND - 5).forEach(s => drawSplat(s, s.x, s.y));
     drawLauncher();
+    drawEnemy();
     projs.forEach(p => drawTomato(p.x, p.y, p.rot, p.secret, p.golden));
   } else {
     ch.y = 300 - R * 3.25 + 40; ch.x = 200;
@@ -1589,7 +1684,7 @@ function update(dt) {
   if (state === 'ending' && E) updateEnding(dt);
   if (state === 'play' && L) {
     updateLevel(dt);
-    if (L) { bossAI(); hailStep(dt); }
+    if (L) { bossAI(); hailStep(dt); if (L.enemy) enemyStep(dt); }
     if (L.shieldPop > 0) L.shieldPop -= dt;
     if (cooldown > 0) cooldown -= dt;
     for (let i = projs.length - 1; i >= 0; i--) {
