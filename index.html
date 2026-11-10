@@ -153,7 +153,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-2';
+const BUILD = '2026-11-10-3';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -1455,7 +1455,7 @@ function updateHud(force) {
   const te = $('task'), key = L.mode + L.phase + (L.shield ? 's' : '') + (L.round || 0);
   te.textContent = taskText();
   if (force || key !== lastTaskKey) { te.classList.remove('pulse'); void te.offsetWidth; te.classList.add('pulse'); lastTaskKey = key; }
-  te.classList.toggle('hidden', state !== 'play');
+  te.classList.toggle('hidden', state !== 'play' || !!L.D.boss);
   $('hInfo').textContent = L.D.boss
     ? `⏱ ${Math.floor(Math.ceil(L.timeLeft) / 60)}:${String(Math.ceil(L.timeLeft) % 60).padStart(2, '0')}`
     : `Рів. ${lvIdx + 1} · 🎯 ${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
