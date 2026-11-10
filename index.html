@@ -47,6 +47,21 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 .lv small{font-size:11px;letter-spacing:1px;font-weight:700;margin-top:2px}
 .lv.locked{opacity:.4}
 .lv.boss{background:#2b1b17;color:#fff;border-color:#2b1b17}
+.card.admin{text-align:left;max-width:440px}
+.adm-head{display:flex;align-items:center;justify-content:space-between}
+.adm-head h2{margin:0}
+#admRefresh{border:none;font-size:18px;font-family:inherit;cursor:pointer}
+.pl{background:#fff;border:2px solid #f0ddd5;border-radius:16px;padding:12px;margin:10px 0;cursor:pointer}
+.pl-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.pl-name{font-weight:900;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-ago{font-size:12px;color:#8a6a60;white-space:nowrap}
+.pl-ago.live{color:#1a9b4b;font-weight:800}
+.pl-now{font-size:14px;margin:4px 0 6px;color:#5a3d36}
+.pl-lv{display:flex;gap:4px;flex-wrap:wrap}
+.pl-lv span{font-size:11px;font-weight:800;background:#fff0e6;border-radius:8px;padding:3px 6px;white-space:nowrap}
+.pl-lv span.ok{background:#dff5e6}
+.pl-ev{margin-top:8px;border-top:1px dashed #f0ddd5;padding-top:6px;font-size:13px;color:#5a3d36;line-height:1.5}
+.pl-ev div{display:flex;gap:8px}.pl-ev b{font-weight:700;color:#8a6a60;min-width:44px}
 </style>
 </head>
 <body>
@@ -68,6 +83,14 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
   <p>Кидай у мене помідори. Звучить просто — але рівні не для всіх 😏</p>
   <div id="levels"></div>
   <p class="small" id="menuNote"></p>
+  <button class="btn ghost hidden" id="adminBtn">👁 Гравці</button>
+</div></div>
+
+<div class="screen hidden" id="admin"><div class="card admin">
+  <div class="adm-head"><h2>👁 Гравці</h2><button class="pill" id="admRefresh" aria-label="Оновити">↻</button></div>
+  <p class="small" id="admStatus"></p>
+  <div id="admList"></div>
+  <button class="btn ghost" id="admClose">До меню</button>
 </div></div>
 
 <div class="screen hidden" id="intro"><div class="card">
@@ -108,6 +131,7 @@ const CONFIG = {
   telegram: '',                     // юзернейм БЕЗ @ для кнопки у фіналі (порожньо = без кнопки)
   telegramButton: 'Написати йому 💬',
   statsUrl: 'https://pomidor-bot.pomidor-tir.workers.dev',  // Cloudflare Worker для статистики
+  adminId: 799375062,               // Telegram id адміна — бачить кнопку «👁 Гравці»
   insideJokes: ['Психологія 🧠'],
   secretWeapon: { emoji: '🧠', name: 'Психологія', color: '#f7b8c4' },
   look: { skin:'#f4d3bf', hair:'#b4582c', hairDark:'#8e3f1d', top:'#27386e', topDark:'#1d2a55', pants:'#26282e', shoes:'#3a3a40', lens:'#3d7bff' },
@@ -256,6 +280,12 @@ const SND = {
   lose:   () => [392, 330, 262].forEach((f, i) => tn(f, f * 0.98, 0.3, 0.14, 'triangle', i * 0.14)),
   shield: () => { tn(200, 900, 0.5, 0.15, 'sine'); nz(0.4, 4000, 500, 0.2, 'bandpass'); },
   swap:   () => nz(0.25, 400, 2400, 0.08, 'bandpass'),
+  // ✅ правильно: дзвінкий «дінь-дінь» угору (step — вищий тон з кожним кроком)
+  good:   (step) => { const b = 784 * Math.pow(1.122, step || 0); tn(b, b, 0.12, 0.22, 'triangle'); tn(b * 1.5, b * 1.5, 0.22, 0.2, 'triangle', 0.09); tn(b * 3, b * 3, 0.18, 0.05, 'sine', 0.09); },
+  // ❌ помилка: низький «бззз» униз
+  err:    () => { tn(220, 200, 0.16, 0.22, 'square'); tn(165, 110, 0.32, 0.24, 'square', 0.15); nz(0.2, 600, 200, 0.12); },
+  // 💨 промах: коротке «буп» униз
+  miss:   () => { tn(420, 180, 0.18, 0.16, 'sine'); nz(0.12, 700, 200, 0.12); },
 };
 
 /* ---------- layout ---------- */
@@ -636,7 +666,7 @@ function updateLevel(dt) {
       L.balloons.forEach(b => { b.x = b.x0 + Math.sin(t * b.sp + b.ph) * b.amp; b.y = b.y0 + Math.cos(t * b.sp * 1.4 + b.ph) * 14; });
       if (L.shield && P.timer && !L.done) {
         const before = Math.ceil(L.orderT); L.orderT -= dt;
-        if (L.orderT <= 0) { SND.bad(); toast('⏱ Час вийшов — кульки повернулись'); resetBalloons(); }
+        if (L.orderT <= 0) { SND.err(); toast('⏱ Час вийшов — кульки повернулись'); resetBalloons(); }
         else if (Math.ceil(L.orderT) !== before) updateHud();
       }
       break;
@@ -698,7 +728,7 @@ function stepProj(p, dt) {
       if (best.held) { setExpr('cool', 0.9); if (Math.random() < 0.5) sayPick(CONFIG.phrases.mirror); }
       return 'ok';
     }
-    wallSplat(ix, iy, kindOf(p), 0.45); burst(ix, iy, TOMATO_COLS, 8); SND.soft();
+    wallSplat(ix, iy, kindOf(p), 0.45); burst(ix, iy, TOMATO_COLS, 8); SND.miss();
     return miss();
   }
   if (L.shield) {
@@ -720,8 +750,8 @@ function stepProj(p, dt) {
     for (const c of L.clones) if (onCharAt(c, p.x, p.y, PR * 0.5)) { hitClone(c, p); return 'gone'; }
   } else if (!L.shield && onChar(p.x, p.y, PR * 0.5)) { hitChar(p); return 'gone'; }
   if (p.reflected && p.vy > 0 && Math.hypot(p.x - LAUNCH.x, p.y - (LAUNCH.y + 10)) < 40) { hitPlayer(p); return 'gone'; }
-  if (p.y >= GROUND) { wallSplat(p.x, GROUND - 2, kindOf(p), 0.5); burst(p.x, GROUND, TOMATO_COLS, 8); SND.soft(); return miss(); }
-  if (p.x < -60 || p.x > WW + 60 || p.y > WH + 60) return miss();
+  if (p.y >= GROUND) { wallSplat(p.x, GROUND - 2, kindOf(p), 0.5); burst(p.x, GROUND, TOMATO_COLS, 8); SND.miss(); return miss(); }
+  if (p.x < -60 || p.x > WW + 60 || p.y > WH + 60) { SND.miss(); return miss(); }
   return 'ok';
 }
 function kindOf(p) { return p.secret ? 'secret' : p.golden ? 'golden' : 'tomato'; }
@@ -737,7 +767,7 @@ function scoreHit(p, c) {
 }
 function hitChar(p) {
   if (L.busy || L.done) return;
-  scoreHit(p, ch);
+  scoreHit(p, ch); SND.good(Math.min(L.phits, 4));
   const gain = p.golden ? 2 : 1;
   L.phits += gain; L.totalHits += gain;
   if (p.golden) goldenHit();
@@ -749,12 +779,12 @@ function hitClone(c, p) {
   if (L.busy || L.done) return;
   scoreHit(p, c);
   if (c.num === L.realNum) {
-    L.phits++; L.totalHits++; L.round++;
+    L.phits++; L.totalHits++; L.round++; SND.good(L.phits);
     setExpr('hit', 1, c); sayPick(CONFIG.phrases.real, 1.6, c);
     updateHud(); checkEnd();
     if (!L.done) { L.busy = true; L.puzzleT = 1.1; }
   } else {
-    L.lives--; SND.bad(); buzz('bad'); flash = 0.25;
+    L.lives--; SND.err(); buzz('bad'); flash = 0.25;
     setExpr('laugh', 1.3, c); sayPick(CONFIG.phrases.fake, 1.8, c);
     updateHud(); checkEnd();
   }
@@ -762,7 +792,7 @@ function hitClone(c, p) {
 function hitPlayer(p) {
   if (L.done) return;
   L.lives--; wallSplat(LAUNCH.x + rnd(-20, 20), LAUNCH.y - 6, 'tomato', 1.1);
-  burst(p.x, p.y, TOMATO_COLS, 20); SND.bad(); buzz('bad');
+  burst(p.x, p.y, TOMATO_COLS, 20); SND.splat(); SND.err(); buzz('bad');
   setExpr('laugh', 1.3); sayPick(CONFIG.phrases.back, 2);
   flash = 0.35;
   updateHud(); checkEnd();
@@ -770,13 +800,13 @@ function hitPlayer(p) {
 function popBalloon(b) {
   b.alive = false; SND.pop(); burst(b.x, b.y, [b.col, '#fff'], 14);
   if (b.val === L.order[L.next]) {
-    L.next++; buzz('light'); updateHud();
+    L.next++; buzz('light'); SND.good(L.next - 1); updateHud();
     if (L.next >= L.order.length) {
       L.shield = false; SND.shield(); buzz('win'); burst(ch.x, ch.y + R, ['#dff3ff', '#c7b8ff', '#fff'], 40, true);
       setExpr('shock', 1.2); sayPick(CONFIG.phrases.unshield, 2); updateHud(true);
     }
   } else {
-    SND.bad(); buzz('bad');
+    SND.err(); buzz('bad'); flash = 0.2;
     setExpr('laugh', 1.2); sayPick(CONFIG.phrases.wrong, 2.2);
     toast('Не той порядок — кульки повернулись 🎈');
     setTimeout(() => { if (L && !L.done && L.shield) resetBalloons(); }, 450);
@@ -809,7 +839,7 @@ function checkOutOfAmmo() {
 }
 
 /* ---------- екрани ---------- */
-const SCREENS = ['menu', 'intro', 'result', 'final'];
+const SCREENS = ['menu', 'intro', 'result', 'final', 'admin'];
 function showOnly(id) { SCREENS.forEach(s => $(s).classList.toggle('hidden', s !== id)); if (id) { $('hud').classList.add('hidden'); $('task').classList.add('hidden'); } }
 function isOpen(i) { return i === 0 || (STARS[i - 1] || 0) > 0; }
 function buildMenu() {
@@ -829,8 +859,91 @@ function buildMenu() {
   });
   const total = STARS.reduce((a, b) => a + (b || 0), 0);
   $('menuNote').textContent = total ? `Зірок: ${total} з ${LEVELS.length * 3} · Влучань за весь час: ${totalHits}` : 'Підказка: можна влучити в мене через дзеркало. Але дзеркало може влучити в тебе 😏';
+  $('adminBtn').classList.toggle('hidden', !isAdmin());
+  stopAdmin();
   showOnly('menu');
 }
+
+/* ---------- адмінка: прогрес гравців ---------- */
+function isAdmin() {
+  try { return IN_TG && !!CONFIG.statsUrl && TG.initDataUnsafe && TG.initDataUnsafe.user && String(TG.initDataUnsafe.user.id) === String(CONFIG.adminId); } catch (e) { return false; }
+}
+let admTimer = null, admOpen = {};
+function stopAdmin() { if (admTimer) { clearInterval(admTimer); admTimer = null; } }
+function openAdmin() { showOnly('admin'); loadAdmin(); stopAdmin(); admTimer = setInterval(loadAdmin, 15000); }
+async function loadAdmin() {
+  $('admStatus').textContent = 'Завантажую…';
+  try {
+    const r = await fetch(CONFIG.statsUrl.replace(/\/$/, '') + '/admin', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ initData: TG.initData }) });
+    if (!r.ok) throw new Error(r.status === 403 ? 'немає доступу' : 'помилка ' + r.status);
+    const d = await r.json();
+    renderAdmin(d);
+  } catch (e) { $('admStatus').textContent = 'Не вдалося завантажити: ' + e.message; }
+}
+function agoText(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return 'щойно';
+  const m = Math.round(s / 60); if (m < 60) return `${m} хв тому`;
+  const h = Math.round(m / 60); if (h < 24) return `${h} год тому`;
+  return `${Math.round(h / 24)} дн тому`;
+}
+function lvlName(l) { return l === 7 ? 'боса 👑' : `рівень ${l}`; }
+function describeEvent(ev) {
+  const st = n => '★'.repeat(n || 0) + '☆'.repeat(3 - (n || 0));
+  switch (ev.e) {
+    case 'bot_start': return '👋 натиснула /start у боті';
+    case 'open': return '📱 відкрила гру';
+    case 'level_start': return `▶️ почала ${lvlName(ev.lvl)}`;
+    case 'level_win': return `✅ пройшла ${lvlName(ev.lvl)} ${st(ev.stars)} (🍅${ev.ammo} ❤️${ev.lives})`;
+    case 'level_lose': return `❌ програла ${lvlName(ev.lvl)}${ev.phase > 1 ? ` на фазі ${ev.phase}` : ''}: ${ev.reason === 'lives' ? 'життя' : 'помідори'} скінчились`;
+    case 'boss_phase': return `👑 бос: фаза ${ev.phase}`;
+    case 'game_complete': return '🏆 пройшла всю гру!';
+  }
+  return ev.e;
+}
+function renderAdmin(d) {
+  const list = $('admList'); list.innerHTML = '';
+  const players = d.players || [];
+  $('admStatus').textContent = players.length ? `Гравців: ${players.length} · оновлюється кожні 15 с` : 'Поки ніхто не грав.';
+  players.forEach(p => {
+    const el = document.createElement('div'); el.className = 'pl';
+    const top = document.createElement('div'); top.className = 'pl-top';
+    const nm = document.createElement('div'); nm.className = 'pl-name';
+    nm.textContent = (p.name || 'Гравець') + (p.username ? ` @${p.username}` : '') + (String(p.id) === String(d.admin) ? ' (ти)' : '');
+    const ago = document.createElement('div'); ago.className = 'pl-ago';
+    const diff = d.now - (p.last || 0);
+    ago.textContent = diff < 120000 ? '● онлайн' : agoText(diff);
+    if (diff < 120000) ago.classList.add('live');
+    top.append(nm, ago);
+    const evs = p.events || [], lastEv = evs[evs.length - 1];
+    const now = document.createElement('div'); now.className = 'pl-now';
+    now.textContent = p.done ? '🏆 Гру пройдено! ' + (lastEv ? '· ' + describeEvent(lastEv) : '') : (lastEv ? 'Зараз: ' + describeEvent(lastEv) : '—');
+    const lv = document.createElement('div'); lv.className = 'pl-lv';
+    LEVELS.forEach((D, i) => {
+      const s = document.createElement('span'), n = (p.stars || {})[i + 1] || 0;
+      s.textContent = (D.boss ? '👑' : i + 1) + ' ' + (n ? '★'.repeat(n) : '—');
+      if (n) s.classList.add('ok');
+      lv.appendChild(s);
+    });
+    el.append(top, now, lv);
+    if (admOpen[p.id]) {
+      const box = document.createElement('div'); box.className = 'pl-ev';
+      evs.slice(-20).reverse().forEach(ev => {
+        const row = document.createElement('div');
+        const t = document.createElement('b'); const dt = new Date(ev.t);
+        t.textContent = dt.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+        const tx = document.createElement('span'); tx.textContent = describeEvent(ev);
+        row.append(t, tx); box.appendChild(row);
+      });
+      el.appendChild(box);
+    }
+    el.addEventListener('click', () => { admOpen[p.id] = !admOpen[p.id]; renderAdmin(d); });
+    list.appendChild(el);
+  });
+}
+$('adminBtn').addEventListener('click', openAdmin);
+$('admRefresh').addEventListener('click', loadAdmin);
+$('admClose').addEventListener('click', buildMenu);
 function showIntro(i) {
   const D = LEVELS[i];
   $('iNum').textContent = D.boss ? 'Фінальний бос' : `Рівень ${i + 1}`;
