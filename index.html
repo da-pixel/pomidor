@@ -153,7 +153,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-3';
+const BUILD = '2026-11-10-4';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -226,9 +226,9 @@ const LEVELS = [
   { name: 'Озеро Нарциса', ammo: 16, preview: 0.28,
     phases: [{ mode: 'clones', goal: 3 }],
     desc: 'Біля озера троє мене. Двоє — відображення, і вони завжди брешуть. Справжній — єдиний, хто каже правду. Прочитай, що кажуть усі троє, вирахуй справжнього й влуч. Вони ще й міняються місцями. Влучиш у копію — мінус життя.' },
-  { name: 'Бос: Его', ammo: 60, preview: 0, boss: true, timeLimit: 180,
-    phases: [{ mode: 'fury', goal: 12 }],
-    desc: 'Фінальний бос — Его, володар дзеркал 👑 Один довгий бій: 12 влучань за 3:00, без підказки траєкторії. Він телепортується, ховається за дзеркалами, читає твої кидки й ухиляється, а ще кидає в тебе уламки — збивай їх помідором. Що менше в нього здоров’я, то він лютіший. Попадання заряджають «🌧️ Град». Готуйся до багатьох спроб 💀' },
+  { name: 'Бос: Его', ammo: 75, preview: 0, boss: true, timeLimit: 210,
+    phases: [{ mode: 'fury', goal: 10 }],
+    desc: 'Фінальний бос — Его, володар дзеркал 👑 Один довгий бій: 10 влучань за 3:30, без підказки траєкторії. Він телепортується, ховається за дзеркалами, читає твої кидки й ухиляється, а ще кидає в тебе уламки — збивай їх помідором. Що менше в нього здоров’я, то він лютіший. Попадання заряджають «🌧️ Град». Готуйся до багатьох спроб 💀' },
 ];
 
 /* ============================================================ */
@@ -781,12 +781,12 @@ function updateWind(dt) {
 /* --- бос: стадії люті (одна фаза, що ускладнюється зі зниженням здоров'я) --- */
 const RING = (r, sp, ph, len) => ({ r, sp, ph, len });
 const BOSS_STAGES = [
-  { name: '', every: 1.6, warn: 0.5, smart: 0.45, dodge: 0.65, dodgeCd: 1.1, attack: 3.2, windMax: 100,
-    rings: [RING(2.1, 1.9, 0, 2.7), RING(2.1, 1.9, Math.PI, 2.7)] },
-  { name: '😤 Его злиться!', every: 1.3, warn: 0.45, smart: 0.55, dodge: 0.72, dodgeCd: 1.0, attack: 2.6, windMax: 160,
-    rings: [RING(2.1, 2.1, 0, 2.7), RING(2.1, 2.1, Math.PI, 2.7), RING(3.0, -1.4, 1, 3.4)] },
-  { name: '🔥 ЛЮТЬ!', every: 1.1, warn: 0.4, smart: 0.6, dodge: 0.78, dodgeCd: 0.9, attack: 2.0, windMax: 200, ghost: true,
-    rings: [RING(2.1, 2.4, 0, 2.7), RING(2.1, 2.4, Math.PI, 2.7), RING(3.0, -1.6, 1, 3.4), RING(3.0, -1.6, 1 + Math.PI, 3.4)] },
+  { name: '', every: 2.1, warn: 0.65, smart: 0.3, dodge: 0.45, dodgeCd: 1.45, attack: 4.2, windMax: 70,
+    rings: [RING(2.1, 1.5, 0, 2.6), RING(2.1, 1.5, Math.PI, 2.6)] },
+  { name: '😤 Его злиться!', every: 1.7, warn: 0.6, smart: 0.38, dodge: 0.5, dodgeCd: 1.3, attack: 3.4, windMax: 110,
+    rings: [RING(2.1, 1.7, 0, 2.6), RING(2.1, 1.7, Math.PI, 2.6), RING(3.0, -1.1, 1, 3.3)] },
+  { name: '🔥 ЛЮТЬ!', every: 1.45, warn: 0.55, smart: 0.42, dodge: 0.55, dodgeCd: 1.2, attack: 2.6, windMax: 140, ghost: true,
+    rings: [RING(2.1, 1.9, 0, 2.6), RING(2.1, 1.9, Math.PI, 2.6), RING(3.0, -1.3, 1, 3.3), RING(3.0, -1.3, 1 + Math.PI, 3.3)] },
 ];
 function bossStageIdx() { const k = L.phits / L.pgoal; return k >= 0.75 ? 2 : k >= 0.5 ? 1 : 0; }
 function applyStage(s, loud) {
@@ -858,7 +858,7 @@ function updateDodge(dt) {
   if (d.t > 0) { d.t -= dt; if (d.t <= 0) d.target = 0; }
   d.off += (d.target - d.off) * Math.min(1, dt * 14);
 }
-const POWER_MAX = 6;
+const POWER_MAX = 5;
 function chargePower() {
   if (!L.D.boss || L.hail) return;
   const was = L.power; L.power = Math.min(POWER_MAX, L.power + 1);
@@ -1668,7 +1668,7 @@ function render() {
     drawTeleportPads();
     if (L.clones) L.clones.forEach(c => drawChar(c));
     else if (L.mode === 'invisible') drawInvisibleBoss();
-    else if (L.P && L.P.ghost) drawGhost(L.reveal > 0 ? 1 : 0.32 + Math.sin(L.t * 9) * 0.08);
+    else if (L.P && L.P.ghost) drawGhost(L.reveal > 0 ? 1 : 0.48 + Math.sin(L.t * 9) * 0.08);
     else drawChar(ch);
     drawBossBar();
     drawShield();
