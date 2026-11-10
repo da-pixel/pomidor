@@ -51,7 +51,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 #rTitle.died + .stars{font-size:18px;letter-spacing:0;font-weight:800;color:#8a6a60}
 .screen.clear{background:linear-gradient(to bottom,rgba(43,27,23,0) 45%,rgba(43,27,23,.3));align-items:flex-end}
 .end-line{font-size:20px!important;font-weight:800;color:var(--ink)!important}
-.coupon{position:relative;background:#fffdf6;border:3px dashed #e8322c;padding:24px 20px 18px}
+.coupon{position:relative;overflow-x:hidden;background:#fffdf6;border:3px dashed #e8322c;padding:24px 20px 18px}
 .coupon:before,.coupon:after{content:'';position:absolute;top:50%;width:26px;height:26px;border-radius:50%;background:rgba(43,27,23,.35);transform:translateY(-50%)}
 .coupon:before{left:-15px}.coupon:after{right:-15px}
 .cp-top{font-size:13px;font-weight:900;letter-spacing:3px;color:#e8322c}
@@ -91,7 +91,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 #admRefresh{border:none;font-size:18px;font-family:inherit;cursor:pointer}
 .pl{background:#fff;border:2px solid #f0ddd5;border-radius:16px;padding:12px;margin:10px 0;cursor:pointer}
 .pl-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
-.pl-name{font-weight:900;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-name{font-weight:900;font-size:16px;overflow-wrap:anywhere;min-width:0}
+.pl-name small{display:block;font-size:12px;font-weight:700;color:#8a6a60}
 .pl-ago{font-size:12px;color:#8a6a60;white-space:nowrap}
 .pl-ago.live{color:#1a9b4b;font-weight:800}
 .pl-now{font-size:14px;margin:4px 0 6px;color:#5a3d36}
@@ -182,7 +183,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-7';
+const BUILD = '2026-11-10-8';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -260,7 +261,7 @@ const LEVELS = [
   { name: 'Озеро Нарциса', ammo: 16, preview: 0.28,
     phases: [{ mode: 'clones', goal: 3 }],
     desc: 'Правду каже лише справжній, копії брешуть. Вирахуй його й влуч.' },
-  { name: 'Бос: Его', ammo: 66, preview: 0, boss: true, timeLimit: 185,
+  { name: 'Бос: Его', ammo: 45, preview: 0, boss: true, timeLimit: 185, reload: 0.65,
     phases: [{ mode: 'fury', goal: 10 }],
     desc: 'Він телепортується, ухиляється й кидає уламки — збивай їх. Готуйся до багатьох спроб 💀' },
 ];
@@ -978,7 +979,7 @@ function updateLevel(dt) {
     case 'cave': ch.x = (P.mirrored ? WW - 286 : 286) + Math.sin(t * 0.7) * 18; break;
     case 'order':
       ch.x = L.shield ? 200 : 200 + Math.sin(t * 1.05) * 115;
-      L.balloons.forEach(b => { b.x = b.x0 + Math.sin(t * b.sp + b.ph) * b.amp; b.y = b.y0 + Math.cos(t * b.sp * 1.4 + b.ph) * 14; });
+      L.balloons.forEach(b => { b.x = clamp(b.x0 + Math.sin(t * b.sp + b.ph) * b.amp, b.r + 6, WW - b.r - 6); b.y = b.y0 + Math.cos(t * b.sp * 1.4 + b.ph) * 14; });
       if (L.shield && P.timer && !L.done) {
         const before = Math.ceil(L.orderT); L.orderT -= dt;
         if (L.orderT <= 0) { SND.err(); toast('⏱ Час вийшов — кульки повернулись'); resetBalloons(); }
@@ -1031,7 +1032,7 @@ function shieldCircle() { return { x: ch.x, y: ch.y + R * 0.95, r: R * 2.55 }; }
 /* --- кидок --- */
 function launch(vx, vy) {
   if (L.ammo <= 0 || cooldown > 0 || L.busy) return;
-  L.ammo--; cooldown = 0.3; L.lastAct = L.t;
+  L.ammo--; cooldown = L.D.reload || 0.3; L.lastAct = L.t;
   const golden = !useSecret && Math.random() < CONFIG.goldenChance;
   projs.push({ x: LAUNCH.x, y: LAUNCH.y, vx, vy, rot: 0, spin: rnd(6, 12) * (vx > 0 ? 1 : -1), golden, secret: useSecret, reflected: false, age: 0 });
   SND.throw(); buzz('light'); updateHud();
@@ -1103,7 +1104,7 @@ function hitChar(p) {
   scoreHit(p, ch); SND.good(Math.min(L.phits, 4));
   if (L.mode === 'invisible' || L.stage === 2) L.reveal = 0.7;
   if (!p.hail) chargePower();
-  const gain = p.golden ? 2 : 1;
+  const gain = p.golden && !L.D.boss ? 2 : 1;
   L.phits += gain; L.totalHits += gain;
   if (p.golden) goldenHit();
   else if (p.secret) { setExpr('laugh', 1); sayPick(CONFIG.phrases.secret); }
@@ -1177,7 +1178,13 @@ function checkOutOfAmmo() {
 
 /* ---------- екрани ---------- */
 const SCREENS = ['menu', 'intro', 'result', 'final', 'admin', 'ending', 'coupon'];
-function showOnly(id) { SCREENS.forEach(s => $(s).classList.toggle('hidden', s !== id)); if (id) { $('hud').classList.add('hidden'); $('task').classList.add('hidden'); $('hPower').classList.add('hidden'); } }
+function showOnly(id) {
+  SCREENS.forEach(s => $(s).classList.toggle('hidden', s !== id));
+  $('toast').classList.remove('show'); $('banner').classList.remove('show');
+  if (id) { $('hud').classList.add('hidden'); $('task').classList.add('hidden'); $('hPower').classList.add('hidden'); }
+  // під час гри Telegram перепитає перед закриттям, щоб не втратити бій випадковим тапом
+  try { if (IN_TG) { if (id) TG.disableClosingConfirmation && TG.disableClosingConfirmation(); else TG.enableClosingConfirmation && TG.enableClosingConfirmation(); } } catch (e) {}
+}
 function isOpen(i) { return i === 0 || (STARS[i - 1] || 0) > 0; }
 function buildMenu() {
   state = 'menu'; L = null; E = null; projs.length = 0; bubble = null; hideHang = false;
@@ -1253,7 +1260,8 @@ function renderAdmin(d) {
     const el = document.createElement('div'); el.className = 'pl';
     const top = document.createElement('div'); top.className = 'pl-top';
     const nm = document.createElement('div'); nm.className = 'pl-name';
-    nm.textContent = (p.name || 'Гравець') + (p.username ? ` @${p.username}` : '') + (String(p.id) === String(d.admin) ? ' (ти)' : '');
+    nm.textContent = (p.name || 'Гравець') + (String(p.id) === String(d.admin) ? ' (ти)' : '');
+    if (p.username) { const u = document.createElement('small'); u.textContent = '@' + p.username; nm.appendChild(u); }
     const ago = document.createElement('div'); ago.className = 'pl-ago';
     const diff = d.now - (p.last || 0);
     ago.textContent = diff < 120000 ? '● онлайн' : agoText(diff);
@@ -1714,6 +1722,12 @@ function drawLauncher() {
   ctx.strokeStyle = '#3a2a20'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(x - 14, y - 18); ctx.lineTo(bx, by); ctx.lineTo(x + 14, y - 18); ctx.stroke();
   if (L && L.ammo > 0 && cooldown <= 0) drawTomato(bx, by, 0, useSecret, false);
+  // перезарядка рогатки (на босі)
+  if (L && L.D.reload && cooldown > 0 && L.ammo > 0) {
+    const k = 1 - cooldown / L.D.reload;
+    ctx.strokeStyle = 'rgba(43,27,23,.25)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y - 14, 13, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = '#e8322c'; ctx.beginPath(); ctx.arc(x, y - 14, 13, -Math.PI / 2, -Math.PI / 2 + TAU * k); ctx.stroke();
+  }
   if (L && !drag && L.ammo === L.D.ammo && !L.done) {
     const k = (time % 1.6) / 1.6, e = k < 0.7 ? k / 0.7 : 1;
     const hx = x + 10 - e * 40, hy = y - 20 + e * 70;
@@ -1722,8 +1736,8 @@ function drawLauncher() {
     ctx.beginPath(); ctx.moveTo(x + 10, y - 20); ctx.lineTo(hx, hy); ctx.stroke(); ctx.setLineDash([]);
     ctx.font = `30px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('👆', hx, hy + 14);
     ctx.globalAlpha = 1;
-    ctx.font = `800 12px ${UIFONT}`; ctx.fillStyle = '#5a3d36';
-    ctx.fillText('тягни назад і відпусти', x, y - 46);
+    ctx.font = `800 12px ${UIFONT}`; ctx.fillStyle = '#5a3d36'; ctx.textAlign = 'center';
+    ctx.fillText('тягни назад', x - 82, y - 4); ctx.fillText('і відпусти', x - 82, y + 12);
   }
   if (drag && L) {
     const [vx, vy] = pullToVel(drag.x - drag.sx, drag.y - drag.sy);
