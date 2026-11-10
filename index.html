@@ -194,7 +194,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-14';
+const BUILD = '2026-11-10-15';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -950,20 +950,26 @@ const critAt = () => 0.97 - 0.03 * ((L && L.tier) || 0);
 function bossDamage(p) {
   let dmg, crit = false;
   if (p.hail) dmg = 8;
-  else { const pw = p.power || 0; if (pw >= critAt()) { dmg = 22; crit = true; } else dmg = 3 + 15 * pw * pw; }
+  else { const r = rawDamage(p.power || 0); dmg = r.dmg; crit = r.crit; }
   dmg = Math.round(dmg * dmgMul());
-  dmgTexts.push({ x: p.x, y: p.y - 10, t: 0, txt: (crit ? 'КРИТ! ' : '') + '−' + dmg, crit });
-  if (crit) { tn(1200, 1800, 0.15, 0.15, 'square'); buzz('win'); }
+  dmgTexts.push({ x: p.x, y: p.y - 10, t: 0, txt: '−' + dmg + (crit ? ' ✦' : ''), crit });
+  if (crit) { tn(1400, 1700, 0.1, 0.08, 'triangle'); buzz('hit'); }
   return dmg;
+}
+// Урон від натягу: 3…18 звичайний; у крит-зоні (останні відсотки натягу) — 20…26, теж залежить від натягу
+function rawDamage(pw) {
+  const ca = critAt();
+  if (pw >= ca) return { dmg: 20 + 6 * clamp((pw - ca) / Math.max(0.01, 1 - ca), 0, 1), crit: true };
+  return { dmg: 3 + 15 * pw * pw, crit: false };
 }
 function drawDmgTexts(dt) {
   for (let i = dmgTexts.length - 1; i >= 0; i--) {
     const d = dmgTexts[i]; d.t += dt; if (d.t > 1.1) { dmgTexts.splice(i, 1); continue; }
-    const a = clamp(1.4 - d.t * 1.3, 0, 1), sc = d.crit ? 1 + Math.max(0, 0.25 - d.t) * 2 : 1;
-    ctx.save(); ctx.translate(d.x, d.y - d.t * 40); ctx.scale(sc, sc); ctx.globalAlpha = a;
-    ctx.font = `900 ${d.crit ? 22 : 17}px ${UIFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(43,27,23,.85)'; ctx.strokeText(d.txt, 0, 0);
-    ctx.fillStyle = d.crit ? '#ffd23f' : '#fff'; ctx.fillText(d.txt, 0, 0);
+    const a = clamp(1.4 - d.t * 1.3, 0, 1);
+    ctx.save(); ctx.translate(d.x, d.y - d.t * 36); ctx.globalAlpha = a;
+    ctx.font = `800 15px ${UIFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(43,27,23,.7)'; ctx.strokeText(d.txt, 0, 0);
+    ctx.fillStyle = d.crit ? '#ffcf4a' : '#fff'; ctx.fillText(d.txt, 0, 0);
     ctx.restore();
   }
 }
@@ -1911,11 +1917,12 @@ function drawLauncher() {
     const pw = Math.min(Math.hypot(drag.x - drag.sx, drag.y - drag.sy) / MAXPULL, 1);
     ctx.fillStyle = 'rgba(255,255,255,.85)'; rr(x + 42, y + 2, 54, 12, 6); ctx.fill();
     const crit = L.D.hp && pw >= critAt();
-    ctx.fillStyle = crit ? '#ffb800' : pw > 0.95 ? '#e8322c' : '#ff9a3c'; rr(x + 44, y + 4, 50 * pw, 8, 4); ctx.fill();
+    ctx.fillStyle = crit ? '#f2b630' : pw > 0.95 ? '#e8322c' : '#ff9a3c'; rr(x + 44, y + 4, 50 * pw, 8, 4); ctx.fill();
     if (L.D.hp) {
-      ctx.font = `900 11px ${UIFONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = crit ? '#c47a00' : '#5a3d36';
-      ctx.fillText(crit ? 'КРИТ!' : '💥 ' + Math.round((3 + 15 * pw * pw) * dmgMul()), x + 100, y + 8);
+      const r = rawDamage(pw);
+      ctx.font = `800 11px ${UIFONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = crit ? '#b9860f' : 'rgba(90,61,54,.8)';
+      ctx.fillText(Math.round(r.dmg * dmgMul()) + (crit ? ' ✦' : ''), x + 100, y + 8);
     }
   }
 }
