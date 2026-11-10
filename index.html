@@ -194,7 +194,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-12';
+const BUILD = '2026-11-10-13';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -247,7 +247,7 @@ const CONFIG = {
     lose:    ['Ще раз? Я нікуди не дінуся', 'Помідори закінчились, его — ні 😏', 'Дзеркало перемогло. Поки що'],
     secret:  ['ЦЕ НЕЧЕСНО 😂', 'Психологія, серйозно?!', 'Не аналізуй мене!', 'Це що, сеанс терапії?'],
     dodge:   ['Хе, мимо 😎', 'Не сьогодні', 'Передбачуваний кидок 😏', 'Матриця', 'Читаю тебе як книжку'],
-    died:    ['Его перемогло. Поки що 😏', 'Ще одна спроба?', 'Справжні нарциси не здаються', 'Майже! Ну, ні 😅'],
+    died:    ['Его перемогло. Поки що 😏', 'Ще одна спроба?', 'Справжні нарциси не здаються', 'Майже! Ну, ні 😅', 'Ти вже читаєш його рухи 👀', 'Рука стає впевненішою 💪'],
   },
 };
 
@@ -273,9 +273,9 @@ const LEVELS = [
   { name: 'Озеро Нарциса', ammo: 16, preview: 0.28,
     phases: [{ mode: 'clones', goal: 3 }],
     desc: 'Правду каже лише справжній, копії брешуть. Вирахуй його й влуч.' },
-  { name: 'Бос: Его', ammo: 45, preview: 0, boss: true, timeLimit: 185, reload: 0.65,
-    phases: [{ mode: 'fury', goal: 10 }],
-    desc: 'Він телепортується, ухиляється й кидає уламки — збивай їх. Готуйся до багатьох спроб 💀' },
+  { name: 'Бос: Его', ammo: 70, preview: 0, boss: true, timeLimit: 185, hp: true,
+    phases: [{ mode: 'fury', goal: 220 }],
+    desc: 'Чим сильніше натягнеш — тим більше шкоди. Він ухиляється й кидає уламки — збивай їх 💀' },
 ];
 
 /* ============================================================ */
@@ -332,6 +332,7 @@ let STARS = load('pt_stars', []);
 let totalHits = load('pt_total', 0);
 let secretUnlocked = load('pt_secret', false), useSecret = false, goldenIdx = 0;
 let ATT = load('pt_att', {});
+let BOSS_BEATEN = load('pt_boss_beaten', false);
 
 /* ---------- sound ---------- */
 let actx = null, noiseBuf = null;
@@ -705,14 +706,16 @@ let drag = null, cooldown = 0, endTimer = 0, flash = 0;
 
 function startLevel(i) {
   lvIdx = i; const D = LEVELS[i];
-  L = { D, ammo: D.ammo, lives: 3, phase: 0, phits: 0, totalHits: 0, t: 0, done: false, busy: false, lastAct: 0, transT: 0, puzzleT: 0, timeLeft: D.timeLimit, power: 0, hail: null };
+  L = { D, ammo: D.ammo, lives: 3, phase: 0, phits: 0, totalHits: 0, t: 0, done: false, busy: false, lastAct: 0, transT: 0, puzzleT: 0, timeLeft: D.timeLimit, power: 0, hail: null,
+    tier: D.boss ? bossTier(i) : 0 };
   projs.length = 0; parts.length = 0; wallSplats.length = 0; bubble = null; drag = null; cooldown = 0; endTimer = 0;
+  E = null; hideHang = false; dmgTexts.length = 0;
   setupPhase();
   state = 'play';
   showOnly(null); $('hud').classList.remove('hidden');
   updateHud(true);
   say(D.boss ? 'Ну що, зустрінемось з моїм его 👑' : pick(['Ну давай', 'Я готовий. Мабуть.', 'Цілься краще 😏', 'Рівень ' + (i + 1) + ', поїхали']), 2);
-  track('level_start', { lvl: i + 1 });
+  track('level_start', D.boss ? { lvl: i + 1, tier: L.tier } : { lvl: i + 1 });
 }
 
 function setupPhase() {
@@ -828,17 +831,27 @@ function updateWind(dt) {
 /* --- бос: стадії люті (одна фаза, що ускладнюється зі зниженням здоров'я) --- */
 const RING = (r, sp, ph, len) => ({ r, sp, ph, len });
 const BOSS_STAGES = [
-  { name: '', every: 1.83, warn: 0.58, smart: 0.35, dodge: 0.52, dodgeCd: 1.26, attack: 3.65, windMax: 80,
+  { name: '', every: 1.83, warn: 0.58, smart: 0.35, dodge: 0.62, dodgeCd: 1.0, attack: 3.65, windMax: 80,
     rings: [RING(2.1, 1.65, 0, 2.65), RING(2.1, 1.65, Math.PI, 2.65)] },
-  { name: '😤 Его злиться!', every: 1.48, warn: 0.54, smart: 0.44, dodge: 0.58, dodgeCd: 1.13, attack: 2.95, windMax: 125,
+  { name: '😤 Его злиться!', every: 1.48, warn: 0.54, smart: 0.44, dodge: 0.7, dodgeCd: 0.9, attack: 2.95, windMax: 125,
     rings: [RING(2.1, 1.87, 0, 2.65), RING(2.1, 1.87, Math.PI, 2.65), RING(3.0, -1.2, 1, 3.35)] },
-  { name: '🔥 ЛЮТЬ!', every: 1.26, warn: 0.5, smart: 0.48, dodge: 0.63, dodgeCd: 1.04, attack: 2.25, windMax: 160, ghost: true,
+  { name: '🔥 ЛЮТЬ!', every: 1.26, warn: 0.5, smart: 0.48, dodge: 0.78, dodgeCd: 0.8, attack: 2.25, windMax: 160, ghost: true,
     rings: [RING(2.1, 2.1, 0, 2.65), RING(2.1, 2.1, Math.PI, 2.65), RING(3.0, -1.43, 1, 3.35), RING(3.0, -1.43, 1 + Math.PI, 3.35)] },
 ];
 function bossStageIdx() { const k = L.phits / L.pgoal; return k >= 0.75 ? 2 : k >= 0.5 ? 1 : 0; }
+/* Прихована адаптивна складність: кожні 5 смертей на босі — ступінь легше (макс. 4).
+   Гравець цього не бачить: HP, помідори й час ті самі; натомість росте її урон і легше влучати. */
+const DDA_MAX = 4;
+// після першої перемоги над босом — назавжди максимальна складність, послаблення більше не вмикаються
+function bossTier(i) { return BOSS_BEATEN ? 0 : Math.min(DDA_MAX, Math.floor((ATT[i] || 0) / 5)); }
 function applyStage(s, loud) {
   L.stage = s;
   L.P = Object.assign({ mode: 'fury', goal: L.pgoal }, BOSS_STAGES[s]);
+  const t = L.tier || 0;
+  if (t) {
+    L.P.dodge *= 1 - 0.15 * t; L.P.dodgeCd *= 1 + 0.12 * t; L.P.smart *= 1 - 0.18 * t;
+    L.P.attack *= 1 + 0.18 * t; L.P.every *= 1 + 0.12 * t; L.P.warn += 0.04 * t; L.P.windMax *= 1 - 0.18 * t;
+  }
   L.windOn = true;
   if (loud) {
     toast(BOSS_STAGES[s].name, 2200); SND.shield(); buzz('bad'); flash = 0.3;
@@ -885,7 +898,7 @@ function bossAI() {
   for (const p of projs) {
     if (p.ai) continue;
     const h = predictHit(p);
-    if (!h || h.t > 0.65) continue;
+    if (!h || h.t > (L.D.hp ? 0.75 : 0.65)) continue;
     p.ai = true;
     if (h.t < 0.12) continue;
     if (P.smart && L.tpNext === null && Math.random() < P.smart) { L.tpNext = pickSpot(); L.tpT = Math.min(L.tpT, 0.12); continue; }
@@ -903,6 +916,11 @@ function updateDodge(dt) {
   const d = L.dg; if (!d) return;
   d.cd -= dt;
   if (d.t > 0) { d.t -= dt; if (d.t <= 0) d.target = 0; }
+  // «манси»: бос постійно пританцьовує вбік, навіть коли в нього не кидають
+  if (L.D.hp && !L.busy) {
+    L.jukeT = (L.jukeT || 0) - dt;
+    if (L.jukeT <= 0 && d.t <= 0) { d.target = rnd(-1.4, 1.4) * R; d.t = rnd(0.35, 0.7); L.jukeT = rnd(0.5, 1.1) * (1 - 0.15 * (L.stage || 0)); }
+  }
   d.off += (d.target - d.off) * Math.min(1, dt * 14);
 }
 const POWER_MAX = 5;
@@ -925,6 +943,30 @@ function hailStep(dt) {
   const tx = L.clones ? 200 : ch.x;
   projs.push({ x: tx + rnd(-75, 75), y: -30, vx: rnd(-25, 25), vy: rnd(250, 380), rot: 0, spin: rnd(6, 12), golden: false, secret: false, reflected: false, age: 0, hail: true });
 }
+// Урон по босу залежить від сили натягу: слабко 3–5, середньо ~8–10, повністю ~18, максимум — КРИТ 22
+const dmgTexts = [];
+const dmgMul = () => 1 + 0.12 * ((L && L.tier) || 0);
+const critAt = () => 0.97 - 0.03 * ((L && L.tier) || 0);
+function bossDamage(p) {
+  let dmg, crit = false;
+  if (p.hail) dmg = 8;
+  else { const pw = p.power || 0; if (pw >= critAt()) { dmg = 22; crit = true; } else dmg = 3 + 15 * pw * pw; }
+  dmg = Math.round(dmg * dmgMul());
+  dmgTexts.push({ x: p.x, y: p.y - 10, t: 0, txt: (crit ? 'КРИТ! ' : '') + '−' + dmg, crit });
+  if (crit) { tn(1200, 1800, 0.15, 0.15, 'square'); buzz('win'); }
+  return dmg;
+}
+function drawDmgTexts(dt) {
+  for (let i = dmgTexts.length - 1; i >= 0; i--) {
+    const d = dmgTexts[i]; d.t += dt; if (d.t > 1.1) { dmgTexts.splice(i, 1); continue; }
+    const a = clamp(1.4 - d.t * 1.3, 0, 1), sc = d.crit ? 1 + Math.max(0, 0.25 - d.t) * 2 : 1;
+    ctx.save(); ctx.translate(d.x, d.y - d.t * 40); ctx.scale(sc, sc); ctx.globalAlpha = a;
+    ctx.font = `900 ${d.crit ? 22 : 17}px ${UIFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(43,27,23,.85)'; ctx.strokeText(d.txt, 0, 0);
+    ctx.fillStyle = d.crit ? '#ffd23f' : '#fff'; ctx.fillText(d.txt, 0, 0);
+    ctx.restore();
+  }
+}
 function hailCounts() { return !!(L.hail && L.hail.hits++ < 2); }
 
 /* --- контратака боса: дзеркальні уламки летять у рогатку, їх треба збивати --- */
@@ -935,8 +977,7 @@ function enemyStep(dt) {
     L.atkT -= dt;
     if (L.atkT < 0.5 && !L.atkWarn) { L.atkWarn = true; if (L.mode !== 'invisible') setExpr('shock', 0.5); tn(660, 990, 0.12, 0.12, 'square'); }
     if (L.atkT <= 0) {
-      const x = ch.x, y = ch.y + R * 0.6, T = rnd(1.9, 2.3), tx = LAUNCH.x + rnd(-8, 8), ty = LAUNCH.y - 4;
-      L.enemy.push({ x, y, vx: (tx - x) / T, vy: (ty - y) / T - 0.5 * SHARD_G * T, rot: 0 });
+      L.enemy.push(makeShard(ch.x, ch.y + R * 0.6));
       L.atkT = P.attack * rnd(0.8, 1.15); L.atkWarn = false;
       nz(0.25, 3000, 6000, 0.12, 'bandpass');
       if (!L.atkTold) { L.atkTold = true; toast('⚠️ Его кидає уламки — збивай їх помідором!', 2600); }
@@ -944,7 +985,7 @@ function enemyStep(dt) {
   }
   for (let i = L.enemy.length - 1; i >= 0; i--) {
     const s = L.enemy[i];
-    s.vy += SHARD_G * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.rot += dt * 7;
+    moveShard(s, dt);
     let gone = false;
     for (let k = projs.length - 1; k >= 0; k--) {
       const p = projs[k];
@@ -963,6 +1004,37 @@ function enemyStep(dt) {
     if (!gone && (s.y > GROUND || s.x < -40 || s.x > WW + 40)) gone = true;
     if (gone) L.enemy.splice(i, 1);
   }
+}
+// Непередбачувані уламки: випадкова тривалість, розгін/гальмування, висота дуги, хвиля та зигзаги.
+// Траєкторія — параметрична від боса до рогатки, тож уламок завжди долітає, але «мансить» по дорозі.
+const EASES = {
+  even:  u => u,
+  rush:  u => u * u * u,                                   // повільно, потім різко
+  brake: u => 1 - Math.pow(1 - u, 3),                      // різко, потім гальмує
+  surge: u => u < 0.55 ? u * 0.45 : 0.2475 + (u - 0.55) * 1.672, // зависає, потім ривок
+};
+function makeShard(x, y) {
+  const kinds = ['arc', 'wave', 'zig', 'rush', 'lob'];
+  const kind = pick(kinds), stage = L.stage || 0;
+  const s = { kind, sx: x, sy: y, tx: LAUNCH.x + rnd(-10, 10), ty: LAUNCH.y - 4, t: 0, rot: 0, x, y,
+    D: rnd(1.3, 2.6) * (1 - 0.08 * stage) * (1 + 0.1 * (L.tier || 0)), ease: 'even', H: rnd(20, 90), A: 0, k: 0, ph: rnd(0, TAU), zz: [] };
+  if (kind === 'wave') { s.A = rnd(35, 70); s.k = rnd(2, 3.5); s.ease = pick(['even', 'brake']); }
+  if (kind === 'zig') { const n = 2 + Math.floor(Math.random() * 2); for (let j = 0; j <= n + 1; j++) s.zz.push(j === 0 || j === n + 1 ? 0 : rnd(-80, 80)); s.ease = pick(['even', 'surge']); }
+  if (kind === 'rush') { s.ease = pick(['rush', 'surge']); s.A = rnd(15, 35); s.k = 1; }
+  if (kind === 'lob') { s.H = rnd(160, 240); s.D *= 1.15; }
+  if (kind === 'arc') s.ease = pick(['even', 'brake', 'rush']);
+  return s;
+}
+function moveShard(s, dt) {
+  s.t += dt; const raw = clamp(s.t / s.D, 0, 1.2), u = Math.min(EASES[s.ease](Math.min(raw, 1)), 1.05);
+  const dx = s.tx - s.sx, dy = s.ty - s.sy, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
+  let off = 0;
+  if (s.A) off += s.A * Math.sin(s.k * Math.PI * u + s.ph) * Math.sin(Math.PI * Math.min(u, 1));
+  if (s.zz.length) { const seg = (s.zz.length - 1) * Math.min(u, 1), j = Math.min(Math.floor(seg), s.zz.length - 2), f = seg - j; off += s.zz[j] + (s.zz[j + 1] - s.zz[j]) * f; }
+  const px = s.x, py = s.y;
+  s.x = s.sx + dx * u + nx * off; s.y = s.sy + dy * u + ny * off - s.H * Math.sin(Math.PI * Math.min(u, 1));
+  if (raw >= 1) s.y += (raw - 1) * 400; // якщо промахнувся повз рогатку — падає вниз
+  s.rot += dt * (6 + Math.hypot(s.x - px, s.y - py) * 0.3);
 }
 function drawEnemy() {
   if (!L || !L.enemy) return;
@@ -1046,7 +1118,8 @@ function launch(vx, vy) {
   if (L.ammo <= 0 || cooldown > 0 || L.busy) return;
   L.ammo--; cooldown = L.D.reload || 0.3; L.lastAct = L.t;
   const golden = !useSecret && Math.random() < CONFIG.goldenChance;
-  projs.push({ x: LAUNCH.x, y: LAUNCH.y, vx, vy, rot: 0, spin: rnd(6, 12) * (vx > 0 ? 1 : -1), golden, secret: useSecret, reflected: false, age: 0 });
+  const power = clamp(Math.hypot(vx, vy) / (MAXPULL * KPOW), 0, 1);
+  projs.push({ x: LAUNCH.x, y: LAUNCH.y, vx, vy, rot: 0, spin: rnd(6, 12) * (vx > 0 ? 1 : -1), golden, secret: useSecret, reflected: false, age: 0, power });
   SND.throw(); buzz('light'); updateHud();
 }
 function pullToVel(dx, dy) {
@@ -1093,7 +1166,7 @@ function stepProj(p, dt) {
   }
   if (L.clones) {
     for (const c of L.clones) if (onCharAt(c, p.x, p.y, PR * 0.5)) { hitClone(c, p); return 'gone'; }
-  } else if (!L.shield && onChar(p.x, p.y, PR * 0.5)) { hitChar(p); return 'gone'; }
+  } else if (!L.shield && onChar(p.x, p.y, PR * 0.5 + (L.tier || 0) * 2)) { hitChar(p); return 'gone'; }
   if (p.reflected && p.vy > 0 && Math.hypot(p.x - LAUNCH.x, p.y - (LAUNCH.y + 10)) < 40) { hitPlayer(p); return 'gone'; }
   if (p.y >= GROUND) { wallSplat(p.x, GROUND - 2, kindOf(p), 0.5); burst(p.x, GROUND, TOMATO_COLS, 8); SND.miss(); return miss(); }
   if (p.x < -60 || p.x > WW + 60 || p.y > WH + 60) { SND.miss(); return miss(); }
@@ -1116,7 +1189,7 @@ function hitChar(p) {
   scoreHit(p, ch); SND.good(Math.min(L.phits, 4));
   if (L.mode === 'invisible' || L.stage === 2) L.reveal = 0.7;
   if (!p.hail) chargePower();
-  const gain = p.golden && !L.D.boss ? 2 : 1;
+  const gain = L.D.hp ? bossDamage(p) : (p.golden && !L.D.boss ? 2 : 1);
   L.phits += gain; L.totalHits += gain;
   if (p.golden) goldenHit();
   else if (p.secret) { setExpr('laugh', 1); sayPick(CONFIG.phrases.secret); }
@@ -1249,11 +1322,11 @@ function describeEvent(ev) {
   switch (ev.e) {
     case 'bot_start': return '👋 натиснула /start у боті';
     case 'open': return '📱 відкрила гру';
-    case 'level_start': return `▶️ почала ${lvlName(ev.lvl)}`;
+    case 'level_start': return `▶️ почала ${lvlName(ev.lvl)}${ev.tier ? ` (прихована ступінь ${ev.tier})` : ''}`;
     case 'level_win': return `✅ пройшла ${lvlName(ev.lvl)} ${st(ev.stars)} (🍅${ev.ammo} ❤️${ev.lives})`;
-    case 'level_lose': return `❌ програла ${lvlName(ev.lvl)}${ev.phase > 1 ? ` на фазі ${ev.phase}` : ''}: ${ev.reason === 'lives' ? 'життя скінчились' : ev.reason === 'time' ? 'час вийшов' : 'помідори скінчились'}`;
+    case 'level_lose': return `❌ програла ${lvlName(ev.lvl)}${ev.phase > 1 ? ` на фазі ${ev.phase}` : ''}: ${ev.reason === 'lives' ? 'життя скінчились' : ev.reason === 'time' ? 'час вийшов' : 'помідори скінчились'}${ev.hp !== undefined ? ` · в Его лишилось ${ev.hp}%` : ''}${ev.tier ? ` · ступінь ${ev.tier}` : ''}`;
     case 'boss_phase': return `👑 бос: фаза ${ev.phase}`;
-    case 'game_complete': return `🏆 пройшла всю гру!${ev.deaths ? ` (смертей на босі: ${ev.deaths})` : ''}`;
+    case 'game_complete': return `🏆 пройшла всю гру!${ev.deaths ? ` (смертей на босі: ${ev.deaths})` : ''}${ev.tier ? ` · на прихованій ступені ${ev.tier}` : ''}`;
     case 'final_answer': return ev.a === 'yes' ? '💬 відповіла «Так 😏»' : '💬 відповіла «Подумаю…»';
     case 'coupon': {
       const what = ev.choice ? ({ coffee: '☕ кава', walk: '🚶 прогулянка', movie: '🎬 кіно' }[ev.choice] || ev.choice) : '';
@@ -1313,7 +1386,7 @@ function showIntro(i) {
   $('iNum').textContent = D.boss ? `Фінальний бос${ATT[i] ? ` · смертей: ${ATT[i]} 💀` : ''}` : `Рівень ${i + 1}`;
   $('iName').textContent = D.name; $('iDesc').textContent = D.desc;
   const g = $('iGoal'); g.innerHTML = '';
-  const chips = D.boss ? [`🎯 ${D.phases[0].goal}`, `⏱ ${Math.floor(D.timeLimit / 60)}:${String(D.timeLimit % 60).padStart(2, '0')}`, `🍅 ${D.ammo}`, '❤️ 3'] : [`🎯 ${D.phases[0].goal} влуч.`, `🍅 ${D.ammo}`, '❤️ 3'];
+  const chips = D.boss ? [D.hp ? `💥 ${D.phases[0].goal} HP` : `🎯 ${D.phases[0].goal}`, `⏱ ${Math.floor(D.timeLimit / 60)}:${String(D.timeLimit % 60).padStart(2, '0')}`, `🍅 ${D.ammo}`, '❤️ 3'] : [`🎯 ${D.phases[0].goal} влуч.`, `🍅 ${D.ammo}`, '❤️ 3'];
   chips.forEach(t => { const s = document.createElement('span'); s.textContent = t; g.appendChild(s); });
   $('iGo').onclick = () => { initAudio(); startLevel(i); };
   showOnly('intro');
@@ -1345,7 +1418,7 @@ function showResult() {
   } else {
     SND.lose(); buzz('bad');
     const reason = L.lives <= 0 ? 'lives' : L.reason === 'time' ? 'time' : 'ammo';
-    track('level_lose', { lvl: lvIdx + 1, reason, phase: L.phase + 1 });
+    track('level_lose', D.boss ? { lvl: lvIdx + 1, reason, tier: L.tier, hp: Math.round(100 * (1 - Math.min(L.phits, L.pgoal) / L.pgoal)) } : { lvl: lvIdx + 1, reason, phase: L.phase + 1 });
     $('rTitle').textContent = reason === 'lives' ? 'Життя закінчились 💔' : reason === 'time' ? 'Час вийшов ⏱' : 'Помідори закінчились 🍅';
     $('rStars').textContent = '☆☆☆';
     $('rText').textContent = pick(CONFIG.phrases.lose);
@@ -1368,7 +1441,8 @@ function startEnding() {
   state = 'ending'; E = { t: 0, shards: [], shattered: false, said: false, cracks: [], cr: 0 };
   $('hud').classList.add('hidden'); $('task').classList.add('hidden'); $('hPower').classList.add('hidden');
   projs.length = 0; bubble = null; ch.splats = []; ch.exprT = 0; hideHang = false;
-  track('game_complete', { stars: STARS.reduce((a, b) => a + (b || 0), 0), deaths: ATT[lvIdx] || 0 });
+  track('game_complete', { stars: STARS.reduce((a, b) => a + (b || 0), 0), deaths: ATT[lvIdx] || 0, tier: L ? L.tier : 0 });
+  BOSS_BEATEN = true; save('pt_boss_beaten', true);
   if (CONFIG.ending === 'coupon') { E.shattered = true; E.said = true; E.t = 5; showCoupon(); return; }
   // тріщини від точки удару
   for (let k = 0; k < 9; k++) {
@@ -1834,7 +1908,13 @@ function drawLauncher() {
     }
     const pw = Math.min(Math.hypot(drag.x - drag.sx, drag.y - drag.sy) / MAXPULL, 1);
     ctx.fillStyle = 'rgba(255,255,255,.85)'; rr(x + 42, y + 2, 54, 12, 6); ctx.fill();
-    ctx.fillStyle = pw > 0.95 ? '#e8322c' : '#ff9a3c'; rr(x + 44, y + 4, 50 * pw, 8, 4); ctx.fill();
+    const crit = L.D.hp && pw >= critAt();
+    ctx.fillStyle = crit ? '#ffb800' : pw > 0.95 ? '#e8322c' : '#ff9a3c'; rr(x + 44, y + 4, 50 * pw, 8, 4); ctx.fill();
+    if (L.D.hp) {
+      ctx.font = `900 11px ${UIFONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = crit ? '#c47a00' : '#5a3d36';
+      ctx.fillText(crit ? 'КРИТ!' : '💥 ' + Math.round((3 + 15 * pw * pw) * dmgMul()), x + 100, y + 8);
+    }
   }
 }
 function drawTomato(x, y, rot, secret, golden) {
@@ -1873,6 +1953,7 @@ function render() {
     drawLauncher();
     drawEnemy();
     projs.forEach(p => drawTomato(p.x, p.y, p.rot, p.secret, p.golden));
+    drawDmgTexts(1 / 60);
   } else {
     ch.y = 300 - R * 3.25 + 40; ch.x = 200;
     drawChar(ch);
