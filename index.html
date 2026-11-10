@@ -34,7 +34,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 .card p{font-size:16px;line-height:1.45;margin:0 0 12px;color:#5a3d36}
 .hi{font-weight:700;color:#a0523f}
 .tag{display:inline-block;background:#ffe3d6;border-radius:999px;padding:4px 10px;font-weight:800;font-size:13px;color:#a0523f}
-.goal{background:#fff0e6;border-radius:14px;padding:10px;font-weight:700;margin:4px 0 6px}
+.goal{display:flex;justify-content:center;gap:8px;margin:4px 0 6px;flex-wrap:nowrap}
+.goal span{background:#fff0e6;border-radius:12px;padding:8px 10px;font-weight:800;font-size:15px;white-space:nowrap}
 .stars{font-size:38px;letter-spacing:4px;margin:6px 0}
 .btn{display:block;width:100%;padding:14px;border:none;border-radius:16px;background:var(--accent);color:#fff;font-size:18px;font-weight:800;text-decoration:none;margin-top:10px;font-family:inherit;box-shadow:0 4px 0 #b11f1a;cursor:pointer}
 .btn:active{transform:translateY(2px);box-shadow:0 2px 0 #b11f1a}
@@ -98,15 +99,16 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* ============================================================
-   НАЛАШТУВАННЯ — все особисте змінюється тут
+   НАЛАШТУВАННЯ
    ============================================================ */
 const CONFIG = {
   greeting: 'Привіт, Юстино 👋',
   finalTitle: 'Ну що, нарциско, полегшало? 😏',
-  finalMessage: '',                 // додатковий текст під заголовком (можна лишити порожнім)
-  telegram: '',                     // твій юзернейм у Telegram БЕЗ @ (кнопка у фіналі). Порожньо = без кнопки
+  finalMessage: '',
+  telegram: '',                     // юзернейм БЕЗ @ для кнопки у фіналі (порожньо = без кнопки)
   telegramButton: 'Написати йому 💬',
-  insideJokes: ['Психологія 🧠'],   // показуються на золотому помідорі
+  statsUrl: '',                     // адреса Cloudflare Worker для статистики (порожньо = вимкнено)
+  insideJokes: ['Психологія 🧠'],
   secretWeapon: { emoji: '🧠', name: 'Психологія', color: '#f7b8c4' },
   look: { skin:'#f4d3bf', hair:'#b4582c', hairDark:'#8e3f1d', top:'#27386e', topDark:'#1d2a55', pants:'#26282e', shoes:'#3a3a40', lens:'#3d7bff' },
   goldenChance: 0.05,
@@ -120,6 +122,9 @@ const CONFIG = {
     wrong:   ['Порядок, нарциско, порядок 😏', 'Математика не пробачає', 'Спершу подумай — потім кидай', 'Хто вчив тебе рахувати?'],
     shield:  ['Купол непробивний, поки не розв’яжеш', 'Спершу кульки 🎈', 'Не-а. Логіка спочатку'],
     unshield:['Ой. Купол упав', 'Окей, розумна. Тепер страшно'],
+    fake:    ['Закохалася у відображення? 😏', 'Це була копія!', 'Нарцис би пишався', 'Відображення каже дякую'],
+    real:    ['Як ти мене вирахувала?!', 'Окей, логіка є', 'Ай! Це був справжній я'],
+    phase:   ['Це ще не кінець 😤', 'Его так просто не здається', 'Фаза два? Легко… мабуть'],
     win:     ['Гаразд, цей рівень твій', 'Поважаю', 'Влучність — 10/10', 'Ти страшна людина 😅'],
     lose:    ['Ще раз? Я нікуди не дінуся', 'Помідори закінчились, его — ні 😏', 'Дзеркало перемогло. Поки що'],
     secret:  ['ЦЕ НЕЧЕСНО 😂', 'Психологія, серйозно?!', 'Не аналізуй мене!', 'Це що, сеанс терапії?'],
@@ -127,21 +132,35 @@ const CONFIG = {
 };
 
 /* ============================================================
-   РІВНІ
+   РІВНІ — кожен трохи складніший за попередній
    ============================================================ */
 const LEVELS = [
-  { name: 'Розминка', goal: 5, ammo: 12, preview: 0.55,
+  { name: 'Розминка', ammo: 12, preview: 0.55,
+    phases: [{ mode: 'static', goal: 5 }],
     desc: 'Тягни палець назад і відпускай — як рогатка. Чим довше тягнеш, тим сильніший кидок.' },
-  { name: 'Вітер', goal: 6, ammo: 16, preview: 0.3, wind: true,
-    desc: 'Вітер змінюється кожні кілька секунд, а я рухаюсь. Бери упередження — підказка траєкторії тепер коротка.' },
-  { name: 'Дзеркальний щит', goal: 6, ammo: 16, preview: 0.3,
-    desc: 'У мене дзеркало 🪞 Влучиш у нього — помідор полетить назад у тебе (мінус життя). Лови момент.' },
-  { name: 'Рикошет', goal: 3, ammo: 18, preview: 0.3,
-    desc: 'Я сховався в печеру. Напряму не дістанеш — тільки через похиле дзеркало праворуч. Кут падіння = куту відбиття. Порахуй, звідки має впасти помідор.' },
-  { name: 'Порядок', goal: 3, ammo: 24, preview: 0.3,
-    desc: 'Мене захищає купол — від нього помідори відскакують. Внизу 5 кульок з прикладами: збий їх від найменшої відповіді до найбільшої, і купол зникне. Помилився — кульки повертаються, просто спробуй ще.' },
+  { name: 'Вітер', ammo: 13, preview: 0.4,
+    phases: [{ mode: 'wind', goal: 5, windMax: 260, speed: 0.8 }],
+    desc: 'Вітер змінюється кожні кілька секунд, а я рухаюсь. Дивись на стрілку вгорі й бери поправку.' },
+  { name: 'Дзеркальний щит', ammo: 13, preview: 0.36,
+    phases: [{ mode: 'mirror', goal: 5, mspeed: 1.1 }],
+    desc: 'У мене дзеркало 🪞 Влучиш у нього — помідор полетить назад у тебе (мінус життя). Лови момент, коли воно збоку.' },
+  { name: 'Рикошет', ammo: 14, preview: 0.32,
+    phases: [{ mode: 'cave', goal: 3 }],
+    desc: 'Я сховався в печеру. Напряму не дістанеш — тільки через похиле дзеркало. Кидай високо у щілину біля стрілки.' },
+  { name: 'Порядок', ammo: 22, preview: 0.3,
+    phases: [{ mode: 'order', goal: 3, amp: [26, 40], sp: [0.9, 1.3], br: 19 }],
+    desc: 'Мене захищає купол. Збий 5 кульок від найменшої відповіді до найбільшої — і купол зникне. Кульки швидко літають, тож треба ще й влучити. Помилка — кульки повертаються.' },
+  { name: 'Озеро Нарциса', ammo: 16, preview: 0.28,
+    phases: [{ mode: 'clones', goal: 3 }],
+    desc: 'Біля озера троє мене. Двоє — відображення, і вони завжди брешуть. Справжній — єдиний, хто каже правду. Прочитай, що кажуть усі троє, вирахуй справжнього й влуч. Вони ще й міняються місцями. Влучиш у копію — мінус життя.' },
+  { name: 'Бос: Его', ammo: 36, preview: 0.25, boss: true,
+    phases: [
+      { mode: 'windmirror', goal: 3, windMax: 200, mspeed: 1.25, speed: 0.75 },
+      { mode: 'cave', goal: 2, mirrored: true },
+      { mode: 'order', goal: 2, amp: [34, 48], sp: [1.15, 1.55], br: 18, timer: 30 },
+    ],
+    desc: 'Фінальний бос — моє его 👑 Фаза 1: вітер + дзеркало. Фаза 2: печера, але дзеркало з іншого боку. Фаза 3: кульки на час. Помідори й життя — спільні на весь бій.' },
 ];
-const PLANNED = 7; // скільки рівнів буде всього (6 і 7 — скоро)
 
 /* ============================================================ */
 const TAU = Math.PI * 2;
@@ -152,7 +171,6 @@ const $ = id => document.getElementById(id);
 const EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 const UIFONT = 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
 
-// Світ: 400 × 700 логічних одиниць, масштабується під екран
 const WW = 400, WH = 700, GROUND = 668;
 const G = 900, LAUNCH = { x: 200, y: 636 }, MAXPULL = 130, KPOW = 8.6, PR = 9;
 const R = 26;
@@ -161,15 +179,16 @@ const cv = $('c'), ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1, S = 1, OX = 0, OY = 0, time = 0;
 
 /* ---------- Telegram ---------- */
-const TG = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined ? window.Telegram.WebApp : null;
-if (TG) {
+const TG = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+const IN_TG = !!(TG && TG.initData);
+if (IN_TG) {
   try { TG.ready(); TG.expand(); } catch (e) {}
   try { TG.disableVerticalSwipes && TG.disableVerticalSwipes(); } catch (e) {}
   try { TG.setHeaderColor && TG.setHeaderColor('#ffe3d6'); TG.setBackgroundColor && TG.setBackgroundColor('#ffe3d6'); } catch (e) {}
 }
 function buzz(kind) {
   try {
-    if (TG && TG.HapticFeedback) {
+    if (IN_TG && TG.HapticFeedback) {
       if (kind === 'hit') TG.HapticFeedback.impactOccurred('medium');
       else if (kind === 'bad') TG.HapticFeedback.notificationOccurred('error');
       else if (kind === 'win') TG.HapticFeedback.notificationOccurred('success');
@@ -179,14 +198,21 @@ function buzz(kind) {
     if (navigator.vibrate) navigator.vibrate(kind === 'bad' ? [40, 40, 80] : kind === 'win' ? [30, 50, 30] : kind === 'hit' ? 35 : 12);
   } catch (e) {}
 }
+/* ---------- статистика (події відправляються адміну через бота) ---------- */
+function track(event, data) {
+  if (!CONFIG.statsUrl || !IN_TG) return;
+  try {
+    const body = JSON.stringify(Object.assign({ e: event, initData: TG.initData }, data || {}));
+    fetch(CONFIG.statsUrl.replace(/\/$/, '') + '/event', { method: 'POST', mode: 'no-cors', headers: { 'content-type': 'text/plain' }, body, keepalive: true });
+  } catch (e) {}
+}
 
 /* ---------- storage ---------- */
 function load(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
 function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 let STARS = load('pt_stars', []);
 let totalHits = load('pt_total', 0);
-let secretUnlocked = load('pt_secret', false), useSecret = false, goldenSeen = false, goldenIdx = 0;
-const UNLOCK_ALL = /[?&]all=1/.test(location.search);
+let secretUnlocked = load('pt_secret', false), useSecret = false, goldenIdx = 0;
 
 /* ---------- sound ---------- */
 let actx = null, noiseBuf = null;
@@ -229,6 +255,7 @@ const SND = {
   win:    () => [523, 659, 784, 1046].forEach((f, i) => tn(f, f * 1.01, 0.25, 0.15, 'triangle', i * 0.1)),
   lose:   () => [392, 330, 262].forEach((f, i) => tn(f, f * 0.98, 0.3, 0.14, 'triangle', i * 0.14)),
   shield: () => { tn(200, 900, 0.5, 0.15, 'sine'); nz(0.4, 4000, 500, 0.2, 'bandpass'); },
+  swap:   () => nz(0.25, 400, 2400, 0.08, 'bandpass'),
 };
 
 /* ---------- layout ---------- */
@@ -270,7 +297,8 @@ const CURLS = [];
 for (let i = 0; i < 26; i++) CURLS.push({ a: Math.PI * (1.02 + i / 25 * 0.96), d: rnd(0.98, 1.12), s: rnd(0.2, 0.28) });
 for (let i = 0; i < 12; i++) CURLS.push({ a: Math.PI * rnd(1.15, 1.85), d: rnd(0.55, 0.85), s: rnd(0.22, 0.3) });
 
-const ch = { x: 200, y: 300, shake: 0, squash: 0, tilt: 0, expr: 'idle', exprT: 0, splats: [] };
+function newChar(num) { return { x: 200, y: 300, shake: 0, squash: 0, tilt: 0, expr: 'idle', exprT: 0, splats: [], num: num || 0, tx: 200, slot: 0 }; }
+const ch = newChar();
 
 function drawArm(side, up) {
   const r = R, L = CONFIG.look;
@@ -392,31 +420,49 @@ function drawSplat(s, x, y) {
   ctx.fillStyle = 'rgba(255,255,255,.45)'; ell(x - r * 0.3, y - r * 0.3, r * 0.12, r * 0.07);
   ctx.globalAlpha = 1;
 }
-function curExpr() { return ch.exprT > 0 ? ch.expr : 'idle'; }
-function drawChar() {
-  const expr = curExpr(), fy = R * 3.25;
-  const x = ch.x + (Math.random() - 0.5) * ch.shake * R * 0.22, y = ch.y + (Math.random() - 0.5) * ch.shake * R * 0.12;
-  ctx.fillStyle = 'rgba(80,30,20,.2)'; ell(ch.x, ch.y + fy, R * 1.1, R * 0.15);
-  ctx.save(); ctx.translate(x, y + fy); ctx.rotate(ch.tilt);
-  const sq = ch.squash * Math.cos((1 - ch.squash) * 18);
+function curExpr(c) { return c.exprT > 0 ? c.expr : 'idle'; }
+function drawChar(c) {
+  const expr = curExpr(c), fy = R * 3.25;
+  const x = c.x + (Math.random() - 0.5) * c.shake * R * 0.22, y = c.y + (Math.random() - 0.5) * c.shake * R * 0.12;
+  ctx.fillStyle = 'rgba(80,30,20,.2)'; ell(c.x, c.y + fy, R * 1.1, R * 0.15);
+  ctx.save(); ctx.translate(x, y + fy); ctx.rotate(c.tilt);
+  const sq = c.squash * Math.cos((1 - c.squash) * 18);
   ctx.scale(1 + sq * 0.12, 1 - sq * 0.12);
-  ctx.translate(0, -fy + Math.sin(time * 3) * R * 0.02);
+  ctx.translate(0, -fy + Math.sin(time * 3 + c.num) * R * 0.02);
   drawBody(expr); drawHead(expr);
-  ctx.save(); silhouette(); ctx.clip(); ch.splats.forEach(s => drawSplat(s, s.dx * R, s.dy * R)); ctx.restore();
+  ctx.save(); silhouette(); ctx.clip(); c.splats.forEach(s => drawSplat(s, s.dx * R, s.dy * R)); ctx.restore();
+  if (c.num) {
+    ctx.fillStyle = '#fff'; circ(0, R * 1.62, 11);
+    ctx.strokeStyle = '#2b1b17'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, R * 1.62, 11, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#2b1b17'; ctx.font = `900 14px ${UIFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(c.num), 0, R * 1.62 + 1);
+  }
   ctx.restore();
 }
-function onChar(px, py, pad) {
+function onCharAt(c, px, py, pad) {
   pad = pad || 0;
-  const dx = px - ch.x, dy = py - ch.y;
+  const dx = px - c.x, dy = py - c.y;
   if ((dx * dx) / (R * 1.15 + pad) ** 2 + ((dy + R * 0.15) ** 2) / (R * 1.3 + pad) ** 2 <= 1) return true;
   return Math.abs(dx) < R * 1.15 + pad && dy > R * 0.6 && dy < R * 3.2;
 }
-function setExpr(e, t) { ch.expr = e; ch.exprT = t; }
+function onChar(px, py, pad) { return onCharAt(ch, px, py, pad); }
+function setExpr(e, t, c) { c = c || ch; c.expr = e; c.exprT = t; }
+function decayChar(c, dt) {
+  c.shake = Math.max(0, c.shake - dt * 4); c.squash = Math.max(0, c.squash - dt * 2.5); c.tilt *= Math.pow(0.02, dt);
+  if (c.exprT > 0) c.exprT -= dt;
+  c.splats.forEach(s => s.age += dt);
+}
+function splatOn(c, p) {
+  const dx = (p.x - c.x) / R, dy = (p.y - c.y) / R;
+  const s = makeSplat(kindOf(p), 0.36 * rnd(0.85, 1.15)); s.dx = clamp(dx, -1.2, 1.2); s.dy = clamp(dy, -1.3, 2.4);
+  c.splats.push(s); if (c.splats.length > 40) c.splats.shift();
+  c.squash = 1; c.shake = 1; c.tilt = clamp(-dx * 0.12, -0.25, 0.25);
+}
 
-/* ---------- speech bubble (world coords) ---------- */
+/* ---------- speech bubble ---------- */
 let bubble = null, lastPhrase = '';
-function say(text, dur, gold) { if (text) bubble = { text, t: 0, dur: dur || 1.9, gold }; }
-function sayPick(list, dur) { let t = pick(list), n = 0; while (t === lastPhrase && list.length > 1 && n++ < 5) t = pick(list); lastPhrase = t; say(t, dur); }
+function say(text, dur, who) { if (text) bubble = { text, t: 0, dur: dur || 1.9, who: who || ch }; }
+function sayPick(list, dur, who) { let t = pick(list), n = 0; while (t === lastPhrase && list.length > 1 && n++ < 5) t = pick(list); lastPhrase = t; say(t, dur, who); }
 function wrap(text, maxW) {
   const words = text.split(' '), lines = []; let ln = '';
   words.forEach(w => { const t = ln ? ln + ' ' + w : w; if (ctx.measureText(t).width > maxW && ln) { lines.push(ln); ln = w; } else ln = t; });
@@ -424,13 +470,13 @@ function wrap(text, maxW) {
 }
 function drawBubble() {
   if (!bubble) return;
-  const b = bubble, inT = Math.min(1, b.t / 0.16), outT = clamp((b.dur - b.t) / 0.25, 0, 1);
+  const b = bubble, c = b.who, inT = Math.min(1, b.t / 0.16), outT = clamp((b.dur - b.t) / 0.25, 0, 1);
   const a = Math.min(inT, outT), sc = 0.7 + 0.3 * (1 - Math.pow(1 - inT, 3));
   const fs = 14;
   ctx.font = `700 ${fs}px ${UIFONT}`;
-  const lines = wrap(b.text, 220), lh = fs * 1.25;
+  const lines = wrap(b.text, 200), lh = fs * 1.25;
   const w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 24, h = lines.length * lh + 14;
-  const tx = ch.x, ty = ch.y - R * 1.42;
+  const tx = c.x, ty = c.y - R * 1.42;
   const bx = clamp(tx - w / 2, 6, WW - w - 6);
   let by = ty - h - 12; if (by < 44) by = 44;
   ctx.save(); ctx.globalAlpha = a; ctx.translate(tx, ty); ctx.scale(sc, sc); ctx.translate(-tx, -ty);
@@ -441,8 +487,8 @@ function drawBubble() {
   ctx.lineTo(t2, by + h); ctx.lineTo(tx, Math.max(ty - 2, by + h + 4)); ctx.lineTo(t1, by + h);
   ctx.lineTo(bx + rad, by + h); ctx.quadraticCurveTo(bx, by + h, bx, by + h - rad); ctx.lineTo(bx, by + rad); ctx.quadraticCurveTo(bx, by, bx + rad, by);
   ctx.closePath();
-  ctx.fillStyle = b.gold ? '#fff6c2' : '#fff'; ctx.fill();
-  ctx.strokeStyle = b.gold ? '#c99a00' : '#2b1b17'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.strokeStyle = '#2b1b17'; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = '#2b1b17'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   lines.forEach((l, i) => ctx.fillText(l, bx + w / 2, by + 7 + lh / 2 + i * lh));
   ctx.restore();
@@ -465,94 +511,179 @@ function wallSplat(x, y, kind, size) { const s = makeSplat(kind, size || 0.5); s
    ============================================================ */
 let state = 'menu', L = null, lvIdx = 0;
 const projs = [];
-let drag = null, cooldown = 0, endTimer = 0;
+let drag = null, cooldown = 0, endTimer = 0, flash = 0;
 
 function startLevel(i) {
   lvIdx = i; const D = LEVELS[i];
-  L = { D, hits: 0, ammo: D.ammo, lives: 3, t: 0, segs: [], wind: 0, windTarget: 0, windT: 0, balloons: [], next: 0, shield: false, shieldPop: 0, done: false, lastAct: 0 };
-  projs.length = 0; parts.length = 0; wallSplats.length = 0; ch.splats = []; bubble = null; drag = null; cooldown = 0; endTimer = 0;
-  ch.exprT = 0;
-  // базова позиція персонажа (ноги на платформі)
-  const feet = [330, 300, 330, 580, 380][i];
-  L.feet = feet; ch.y = feet - R * 3.25; ch.x = [290, 200, 200, 290, 200][i];
-  L.plat = i === 3 ? null : { x: ch.x, y: feet, w: i === 1 ? 300 : 110 };
-  if (i === 1) { L.plat.x = 200; }
-  if (i === 2) { L.mirror = { a: 0, len: R * 3.2 }; }
-  if (i === 3) {
-    L.segs = [
-      { x1: 228, y1: 442, x2: 345, y2: 442, type: 'wall' },     // дах печери
-      { x1: 234, y1: 442, x2: 234, y2: 580, type: 'wall' },     // ліва стіна
-      { x1: 228, y1: 582, x2: 400, y2: 582, type: 'wall' },     // підлога
-      { x1: 398, y1: 470, x2: 335, y2: 580, type: 'mirror' },   // похиле дзеркало праворуч
-    ];
-  }
-  if (i === 4) { L.shield = true; makeBalloons(); }
+  L = { D, ammo: D.ammo, lives: 3, phase: 0, phits: 0, totalHits: 0, t: 0, done: false, busy: false, lastAct: 0, transT: 0, puzzleT: 0 };
+  projs.length = 0; parts.length = 0; wallSplats.length = 0; bubble = null; drag = null; cooldown = 0; endTimer = 0;
+  setupPhase();
   state = 'play';
   showOnly(null); $('hud').classList.remove('hidden');
-  updateHud();
-  say(i === 4 ? pick(CONFIG.phrases.shield) : pick(['Ну давай', 'Я готовий. Мабуть.', 'Цілься краще 😏', 'Рівень ' + (i + 1) + ', поїхали']), 2);
+  updateHud(true);
+  say(D.boss ? 'Ну що, зустрінемось з моїм его 👑' : pick(['Ну давай', 'Я готовий. Мабуть.', 'Цілься краще 😏', 'Рівень ' + (i + 1) + ', поїхали']), 2);
+  track('level_start', { lvl: i + 1 });
 }
 
-/* --- кульки для рівня 5 --- */
-const EXPR_POOL = [['√16', 4], ['15÷3', 5], ['3!', 6], ['1+2×3', 7], ['2³', 8], ['√81', 9], ['2⁴−6', 10], ['0,5×22', 11], ['3·2²', 12], ['2⁰+2', 3], ['−(−2)', 2], ['26÷2', 13], ['(1+2)²', 9], ['7²÷7', 7], ['∛27', 3]];
+function setupPhase() {
+  const P = L.D.phases[L.phase];
+  L.P = P; L.mode = P.mode; L.pgoal = P.goal; L.phits = 0;
+  L.segs = []; L.plat = null; L.wind = 0; L.windTarget = 0; L.windT = 0; L.windOn = false;
+  L.mirror = null; L.balloons = []; L.shield = false; L.clones = null; L.t = 0; L.orderT = 0;
+  projs.length = 0;
+  ch.splats = ch.splats || []; ch.exprT = 0;
+  let feet = 330;
+  switch (P.mode) {
+    case 'static': feet = 330; ch.x = 290; L.plat = { x: 290, w: 110 }; break;
+    case 'wind': feet = 300; ch.x = 200; L.plat = { x: 200, w: 300 }; L.windOn = true; break;
+    case 'mirror': feet = 330; ch.x = 200; L.plat = { x: 200, w: 260 }; L.mirror = { len: R * 3.2 }; break;
+    case 'windmirror': feet = 320; ch.x = 200; L.plat = { x: 200, w: 300 }; L.windOn = true; L.mirror = { len: R * 3.2 }; break;
+    case 'cave': {
+      feet = 580; const m = P.mirrored, X = v => m ? WW - v : v;
+      ch.x = X(286);
+      L.segs = [
+        { x1: X(228), y1: 442, x2: X(345), y2: 442, type: 'wall' },
+        { x1: X(234), y1: 442, x2: X(234), y2: 580, type: 'wall' },
+        { x1: X(228), y1: 582, x2: X(400), y2: 582, type: 'wall' },
+        { x1: X(398), y1: 470, x2: X(335), y2: 580, type: 'mirror' },
+      ];
+      L.gapX = X(372);
+      break;
+    }
+    case 'order': feet = 380; ch.x = 200; L.plat = { x: 200, w: 270 }; L.shield = true; makeBalloons(P); if (P.timer) L.orderT = P.timer; break;
+    case 'clones': feet = 400; L.plat = { x: 200, w: 370 }; makeClones(); break;
+  }
+  L.feet = feet; ch.y = feet - R * 3.25;
+  if (L.plat) L.plat.y = feet;
+  if (L.clones) L.clones.forEach(c => c.y = ch.y);
+}
+
+/* --- кульки --- */
+const EXPR_POOL = [['√16', 4], ['15÷3', 5], ['3!', 6], ['1+2×3', 7], ['2³', 8], ['√81', 9], ['2⁴−6', 10], ['0,5×22', 11], ['3·2²', 12], ['2⁰+2', 3], ['−(−2)', 2], ['26÷2', 13], ['(1+2)²', 9], ['7²÷7', 7], ['∛27', 3], ['4!÷2', 12], ['10−2×3', 4], ['√(9+16)', 5]];
 const BCOLS = ['#ff6b6b', '#ffb347', '#6bc5ff', '#8be07b', '#c78bff', '#ff8fc7'];
-function makeBalloons() {
+function makeBalloons(P) {
   const pool = EXPR_POOL.slice().sort(() => Math.random() - 0.5), chosen = [], used = new Set();
   for (const e of pool) { if (!used.has(e[1])) { used.add(e[1]); chosen.push(e); } if (chosen.length === 5) break; }
   const xs = [55, 128, 200, 272, 345].sort(() => Math.random() - 0.5);
-  L.balloons = chosen.map((e, k) => ({ label: e[0], val: e[1], x0: xs[k], y0: rnd(450, 500), amp: rnd(8, 16), sp: rnd(0.6, 1.0), ph: rnd(0, TAU), alive: true, x: 0, y: 0, col: BCOLS[k] }));
+  L.balloons = chosen.map((e, k) => ({ label: e[0], val: e[1], x0: xs[k], y0: rnd(450, 500), amp: rnd(P.amp[0], P.amp[1]), sp: rnd(P.sp[0], P.sp[1]), ph: rnd(0, TAU), alive: true, x: 0, y: 0, r: P.br, col: BCOLS[k] }));
   L.order = L.balloons.map(b => b.val).sort((a, b) => a - b);
   L.next = 0;
 }
-function resetBalloons() { L.balloons.forEach(b => b.alive = true); L.next = 0; updateHud(); }
+function resetBalloons() { L.balloons.forEach(b => b.alive = true); L.next = 0; if (L.P.timer) L.orderT = L.P.timer; updateHud(); }
 
-/* --- оновлення рівня --- */
+/* --- копії (Озеро Нарциса) --- */
+const SLOTS = [75, 200, 325];
+const STMTS = [
+  { t: (s, x) => `Справжній — №${x}`, f: (h, s, x) => h === x, p: 1 },
+  { t: (s, x) => `Справжній — не №${x}`, f: (h, s, x) => h !== x, p: 1 },
+  { t: () => 'Я справжній', f: (h, s) => h === s },
+  { t: () => 'Я не справжній', f: (h, s) => h !== s },
+  { t: (s, x) => `№${x} бреше`, f: (h, s, x) => h !== x, p: 1, other: 1 },
+  { t: (s, x) => `№${x} каже правду`, f: (h, s, x) => h === x, p: 1, other: 1 },
+  { t: () => 'Номер справжнього — парний', f: h => h % 2 === 0 },
+  { t: () => 'Номер справжнього — непарний', f: h => h % 2 === 1 },
+  { t: () => 'Номер справжнього більший за мій', f: (h, s) => h > s },
+  { t: () => 'Номер справжнього менший за мій', f: (h, s) => h < s },
+];
+function genPuzzle() {
+  for (let tries = 0; tries < 2000; tries++) {
+    const st = [1, 2, 3].map(s => { const T = pick(STMTS); let x = 0; if (T.p) x = pick([1, 2, 3].filter(v => !T.other || v !== s)); return { s, T, x, text: T.t(s, x) }; });
+    if (new Set(st.map(q => q.text)).size < 3) continue;
+    // справжній = той, чиє твердження істинне, а всі інші — хибні
+    const cons = [1, 2, 3].filter(h => st.every(q => q.T.f(h, q.s, q.x) === (q.s === h)));
+    if (cons.length !== 1) continue;
+    // відсіюємо надто прямі: «Я справжній» від справжнього
+    if (st.some(q => q.s === cons[0] && q.T.t(0, 0) === 'Я справжній')) continue;
+    return { st, real: cons[0] };
+  }
+  return { st: [{ s: 1, text: 'Я не справжній' }, { s: 2, text: 'Справжній — №3' }, { s: 3, text: '№1 каже правду' }], real: 3 };
+}
+function makeClones() {
+  L.clones = [1, 2, 3].map(n => newChar(n));
+  const perm = [0, 1, 2].sort(() => Math.random() - 0.5);
+  L.clones.forEach((c, i) => { c.slot = perm[i]; c.x = c.tx = SLOTS[c.slot]; });
+  L.shufT = 2.6; L.round = 0;
+  newPuzzle();
+}
+function newPuzzle() {
+  const p = genPuzzle();
+  L.puzzle = p; L.realNum = p.real;
+  L.clones.forEach(c => { c.splats = []; c.exprT = 0; });
+}
+
+/* --- оновлення режимів --- */
+function setMirrorSeg() {
+  const cx = ch.x, cy = ch.y + R * 1.1, a = Math.PI / 2 + Math.sin(L.t * L.P.mspeed) * 1.65 + Math.sin(L.t * 0.47) * 0.35;
+  const mx = cx + Math.cos(a) * R * 2.1, my = cy + Math.sin(a) * R * 2.5;
+  const tx = -Math.sin(a), ty = Math.cos(a), hl = L.mirror.len / 2;
+  L.segs = [{ x1: mx - tx * hl, y1: my - ty * hl, x2: mx + tx * hl, y2: my + ty * hl, type: 'mirror', held: true }];
+}
+function updateWind(dt) {
+  L.windT -= dt;
+  if (L.windT <= 0) { const m = L.P.windMax; L.windTarget = Math.round(rnd(-m, m) / 20) * 20; L.windT = rnd(3, 4.5); }
+  L.wind += (L.windTarget - L.wind) * Math.min(1, dt * 2.5);
+}
 function updateLevel(dt) {
-  L.t += dt; const t = L.t, i = lvIdx;
-  if (i === 0) ch.x = 290 + Math.sin(t * 0.6) * 10;
-  if (i === 1) {
-    ch.x = 200 + Math.sin(t * 0.9) * 120;
-    L.windT -= dt;
-    if (L.windT <= 0) { L.windTarget = Math.round(rnd(-380, 380) / 20) * 20; L.windT = rnd(3, 4.5); }
-    L.wind += (L.windTarget - L.wind) * Math.min(1, dt * 2.5);
+  L.t += dt; const t = L.t, P = L.P;
+  switch (L.mode) {
+    case 'static': ch.x = 290 + Math.sin(t * 0.6) * 10; break;
+    case 'wind': ch.x = 200 + Math.sin(t * P.speed) * 115; updateWind(dt); break;
+    case 'mirror': ch.x = 200 + Math.sin(t * 0.55) * 85; setMirrorSeg(); break;
+    case 'windmirror': ch.x = 200 + Math.sin(t * P.speed) * 105; updateWind(dt); setMirrorSeg(); break;
+    case 'cave': ch.x = (P.mirrored ? WW - 286 : 286) + Math.sin(t * 0.7) * 18; break;
+    case 'order':
+      ch.x = L.shield ? 200 : 200 + Math.sin(t * 1.05) * 115;
+      L.balloons.forEach(b => { b.x = b.x0 + Math.sin(t * b.sp + b.ph) * b.amp; b.y = b.y0 + Math.cos(t * b.sp * 1.4 + b.ph) * 14; });
+      if (L.shield && P.timer && !L.done) {
+        const before = Math.ceil(L.orderT); L.orderT -= dt;
+        if (L.orderT <= 0) { SND.bad(); toast('⏱ Час вийшов — кульки повернулись'); resetBalloons(); }
+        else if (Math.ceil(L.orderT) !== before) updateHud();
+      }
+      break;
+    case 'clones': {
+      if (!L.busy) {
+        L.shufT -= dt;
+        if (L.shufT <= 0) {
+          const a = Math.floor(Math.random() * 3); let b = (a + 1 + Math.floor(Math.random() * 2)) % 3;
+          const ca = L.clones.find(c => c.slot === a), cb = L.clones.find(c => c.slot === b);
+          ca.slot = b; cb.slot = a; SND.swap();
+          L.shufT = Math.max(1.6, 2.6 - L.round * 0.35);
+        }
+      }
+      L.clones.forEach((c, i) => {
+        c.tx = SLOTS[c.slot] + Math.sin(t * 1.3 + i * 2) * 14;
+        c.x += (c.tx - c.x) * Math.min(1, dt * 5);
+        c.y = ch.y;
+      });
+      if (L.puzzleT > 0) { L.puzzleT -= dt; if (L.puzzleT <= 0) { L.busy = false; newPuzzle(); updateHud(true); } }
+      break;
+    }
   }
-  if (i === 2) {
-    ch.x = 200 + Math.sin(t * 0.5) * 80;
-    L.mirror.a = Math.PI / 2 + Math.sin(t * 1.15) * 1.65 + Math.sin(t * 0.47) * 0.35;
-    const cx = ch.x, cy = ch.y + R * 1.1, a = L.mirror.a;
-    const mx = cx + Math.cos(a) * R * 2.1, my = cy + Math.sin(a) * R * 2.5;
-    const tx = -Math.sin(a), ty = Math.cos(a), hl = L.mirror.len / 2;
-    L.segs = [{ x1: mx - tx * hl, y1: my - ty * hl, x2: mx + tx * hl, y2: my + ty * hl, type: 'mirror', held: true }];
+  if (L.transT > 0) {
+    L.transT -= dt;
+    if (L.transT <= 0) { L.phase++; setupPhase(); L.busy = false; updateHud(true); }
   }
-  if (i === 3) ch.x = 286 + Math.sin(t * 0.7) * 18;
-  if (i === 4) {
-    if (L.shield) ch.x = 200;
-    else ch.x = 200 + Math.sin(t * 1.0) * 110;
-    L.balloons.forEach(b => { b.x = b.x0 + Math.sin(t * b.sp + b.ph) * b.amp; b.y = b.y0 + Math.cos(t * b.sp * 1.3 + b.ph) * 10; });
-  }
-  if (L.shieldPop > 0) L.shieldPop -= dt;
 }
 function shieldCircle() { return { x: ch.x, y: ch.y + R * 0.95, r: R * 2.55 }; }
 
 /* --- кидок --- */
 function launch(vx, vy) {
-  if (L.ammo <= 0 || cooldown > 0) return;
+  if (L.ammo <= 0 || cooldown > 0 || L.busy) return;
   L.ammo--; cooldown = 0.3; L.lastAct = L.t;
-  const golden = !useSecret && L.t > 0 && Math.random() < CONFIG.goldenChance;
+  const golden = !useSecret && Math.random() < CONFIG.goldenChance;
   projs.push({ x: LAUNCH.x, y: LAUNCH.y, vx, vy, rot: 0, spin: rnd(6, 12) * (vx > 0 ? 1 : -1), golden, secret: useSecret, reflected: false, age: 0 });
   SND.throw(); buzz('light'); updateHud();
 }
 function pullToVel(dx, dy) {
-  let len = Math.hypot(dx, dy); if (len < 1) return [0, 0];
+  const len = Math.hypot(dx, dy); if (len < 1) return [0, 0];
   const k = Math.min(len, MAXPULL) / len;
   return [-dx * k * KPOW, -dy * k * KPOW];
 }
 
 function stepProj(p, dt) {
   const x0 = p.x, y0 = p.y;
-  p.vx += (L.wind || 0) * dt; p.vy += G * dt;
+  p.vx += (L.windOn ? L.wind : 0) * dt; p.vy += G * dt;
   p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.spin * dt; p.age += dt;
-  // сегменти
   let best = null, bt = 2;
   for (const s of L.segs) { const tt = segInt(x0, y0, p.x, p.y, s.x1, s.y1, s.x2, s.y2); if (tt !== null && tt < bt) { bt = tt; best = s; } }
   if (best) {
@@ -568,9 +699,8 @@ function stepProj(p, dt) {
       return 'ok';
     }
     wallSplat(ix, iy, kindOf(p), 0.45); burst(ix, iy, TOMATO_COLS, 8); SND.soft();
-    return miss(p);
+    return miss();
   }
-  // купол
   if (L.shield) {
     const c = shieldCircle(), dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy);
     if (d < c.r + PR && (p.vx * dx + p.vy * dy) < 0) {
@@ -583,42 +713,54 @@ function stepProj(p, dt) {
       return 'ok';
     }
   }
-  // кульки
-  if (L.balloons.length) {
-    for (const b of L.balloons) {
-      if (!b.alive) continue;
-      if (Math.hypot(p.x - b.x, p.y - b.y) < 22 + PR) { popBalloon(b); return 'gone'; }
-    }
+  for (const b of L.balloons) {
+    if (b.alive && Math.hypot(p.x - b.x, p.y - b.y) < b.r + PR) { popBalloon(b); return 'gone'; }
   }
-  // персонаж
-  if (!L.shield && onChar(p.x, p.y, PR * 0.5)) { hitChar(p); return 'gone'; }
-  // гравець
+  if (L.clones) {
+    for (const c of L.clones) if (onCharAt(c, p.x, p.y, PR * 0.5)) { hitClone(c, p); return 'gone'; }
+  } else if (!L.shield && onChar(p.x, p.y, PR * 0.5)) { hitChar(p); return 'gone'; }
   if (p.reflected && p.vy > 0 && Math.hypot(p.x - LAUNCH.x, p.y - (LAUNCH.y + 10)) < 40) { hitPlayer(p); return 'gone'; }
-  // земля / межі
-  if (p.y >= GROUND) { wallSplat(p.x, GROUND - 2, kindOf(p), 0.5); burst(p.x, GROUND, TOMATO_COLS, 8); SND.soft(); return miss(p); }
-  if (p.x < -60 || p.x > WW + 60 || p.y > WH + 60) return miss(p);
+  if (p.y >= GROUND) { wallSplat(p.x, GROUND - 2, kindOf(p), 0.5); burst(p.x, GROUND, TOMATO_COLS, 8); SND.soft(); return miss(); }
+  if (p.x < -60 || p.x > WW + 60 || p.y > WH + 60) return miss();
   return 'ok';
 }
 function kindOf(p) { return p.secret ? 'secret' : p.golden ? 'golden' : 'tomato'; }
-function miss(p) {
-  if (!L.done && Math.random() < 0.3) { sayPick(CONFIG.phrases.miss, 1.4); setExpr('cool', 0.8); }
+function miss() {
+  if (!L.done && !L.busy && Math.random() < 0.3 && !L.clones) { sayPick(CONFIG.phrases.miss, 1.4); setExpr('cool', 0.8); }
   return 'gone';
 }
-function hitChar(p) {
-  const dx = (p.x - ch.x) / R, dy = (p.y - ch.y) / R;
-  const s = makeSplat(kindOf(p), 0.36 * rnd(0.85, 1.15)); s.dx = clamp(dx, -1.2, 1.2); s.dy = clamp(dy, -1.3, 2.4);
-  ch.splats.push(s); if (ch.splats.length > 40) ch.splats.shift();
-  ch.squash = 1; ch.shake = 1; ch.tilt = clamp(-dx * 0.12, -0.25, 0.25);
+function scoreHit(p, c) {
+  splatOn(c, p);
   burst(p.x, p.y, p.golden ? ['#ffd700', '#fff3a0', '#ffb300'] : TOMATO_COLS, p.golden ? 30 : 16, p.golden);
   SND.splat(); buzz('hit');
+  totalHits++; save('pt_total', totalHits);
+}
+function hitChar(p) {
+  if (L.busy || L.done) return;
+  scoreHit(p, ch);
   const gain = p.golden ? 2 : 1;
-  L.hits += gain; totalHits++; save('pt_total', totalHits);
+  L.phits += gain; L.totalHits += gain;
   if (p.golden) goldenHit();
   else if (p.secret) { setExpr('laugh', 1); sayPick(CONFIG.phrases.secret); }
   else { setExpr('hit', 0.8); sayPick(CONFIG.phrases.hit, 1.5); }
   updateHud(); checkEnd();
 }
+function hitClone(c, p) {
+  if (L.busy || L.done) return;
+  scoreHit(p, c);
+  if (c.num === L.realNum) {
+    L.phits++; L.totalHits++; L.round++;
+    setExpr('hit', 1, c); sayPick(CONFIG.phrases.real, 1.6, c);
+    updateHud(); checkEnd();
+    if (!L.done) { L.busy = true; L.puzzleT = 1.1; }
+  } else {
+    L.lives--; SND.bad(); buzz('bad'); flash = 0.25;
+    setExpr('laugh', 1.3, c); sayPick(CONFIG.phrases.fake, 1.8, c);
+    updateHud(); checkEnd();
+  }
+}
 function hitPlayer(p) {
+  if (L.done) return;
   L.lives--; wallSplat(LAUNCH.x + rnd(-20, 20), LAUNCH.y - 6, 'tomato', 1.1);
   burst(p.x, p.y, TOMATO_COLS, 20); SND.bad(); buzz('bad');
   setExpr('laugh', 1.3); sayPick(CONFIG.phrases.back, 2);
@@ -631,62 +773,71 @@ function popBalloon(b) {
     L.next++; buzz('light'); updateHud();
     if (L.next >= L.order.length) {
       L.shield = false; SND.shield(); buzz('win'); burst(ch.x, ch.y + R, ['#dff3ff', '#c7b8ff', '#fff'], 40, true);
-      setExpr('shock', 1.2); sayPick(CONFIG.phrases.unshield, 2); updateHud();
+      setExpr('shock', 1.2); sayPick(CONFIG.phrases.unshield, 2); updateHud(true);
     }
   } else {
     SND.bad(); buzz('bad');
     setExpr('laugh', 1.2); sayPick(CONFIG.phrases.wrong, 2.2);
     toast('Не той порядок — кульки повернулись 🎈');
-    setTimeout(() => { if (L && !L.done) resetBalloons(); }, 450);
+    setTimeout(() => { if (L && !L.done && L.shield) resetBalloons(); }, 450);
   }
 }
 function goldenHit() {
-  goldenSeen = true; setExpr('laugh', 1.6);
+  setExpr('laugh', 1.6);
   const j = CONFIG.insideJokes; $('bannerText').textContent = j.length ? j[goldenIdx++ % j.length] : '';
   const bn = $('banner'); bn.classList.add('show'); clearTimeout(goldenHit.t); goldenHit.t = setTimeout(() => bn.classList.remove('show'), 2800);
   SND.golden();
   if (!secretUnlocked) {
     secretUnlocked = true; save('pt_secret', true);
-    setTimeout(() => { toast(`🤫 Секретна зброя: ${CONFIG.secretWeapon.emoji} ${CONFIG.secretWeapon.name} — тисни вгорі`, 3000); updateHud(); }, 2900);
+    setTimeout(() => { toast(`🤫 Секретна зброя: ${CONFIG.secretWeapon.emoji} — тисни вгорі`, 3000); updateHud(); }, 2900);
   }
 }
 function checkEnd() {
   if (L.done) return;
-  if (L.hits >= L.D.goal) { L.done = true; endTimer = 1.0; L.win = true; setExpr('smile', 3); sayPick(CONFIG.phrases.win, 2); }
-  else if (L.lives <= 0) { L.done = true; endTimer = 1.0; L.win = false; }
+  if (L.lives <= 0) { L.done = true; endTimer = 1.0; L.win = false; return; }
+  if (L.phits >= L.pgoal) {
+    if (L.phase < L.D.phases.length - 1) {
+      L.busy = true; L.transT = 1.3; projs.length = 0;
+      setExpr('shock', 1.3); sayPick(CONFIG.phrases.phase, 1.6);
+      toast(`👑 Фаза ${L.phase + 2} з ${L.D.phases.length}!`); SND.shield();
+      track('boss_phase', { lvl: lvIdx + 1, phase: L.phase + 2 });
+    } else { L.done = true; endTimer = 1.0; L.win = true; setExpr('smile', 3); sayPick(CONFIG.phrases.win, 2); }
+  }
 }
 function checkOutOfAmmo() {
-  if (!L.done && L.ammo <= 0 && projs.length === 0) { L.done = true; endTimer = 0.8; L.win = false; }
+  if (!L.done && L.ammo <= 0 && projs.length === 0 && !L.busy) { L.done = true; endTimer = 0.8; L.win = false; }
 }
 
 /* ---------- екрани ---------- */
 const SCREENS = ['menu', 'intro', 'result', 'final'];
 function showOnly(id) { SCREENS.forEach(s => $(s).classList.toggle('hidden', s !== id)); if (id) { $('hud').classList.add('hidden'); $('task').classList.add('hidden'); } }
-function isOpen(i) { return UNLOCK_ALL || i === 0 || (STARS[i - 1] || 0) > 0; }
+function isOpen(i) { return i === 0 || (STARS[i - 1] || 0) > 0; }
 function buildMenu() {
-  state = 'menu'; L = null; projs.length = 0;
+  state = 'menu'; L = null; projs.length = 0; bubble = null;
   $('hi').textContent = CONFIG.greeting;
   const box = $('levels'); box.innerHTML = '';
-  for (let i = 0; i < PLANNED; i++) {
+  LEVELS.forEach((D, i) => {
     const b = document.createElement('button');
-    const ready = i < LEVELS.length, open = ready && isOpen(i);
-    b.className = 'lv' + (open ? '' : ' locked') + (i === PLANNED - 1 ? ' boss' : '');
-    const n = document.createElement('div'); n.textContent = i === PLANNED - 1 ? '👑' : (open ? i + 1 : '🔒');
+    const open = isOpen(i);
+    b.className = 'lv' + (open ? '' : ' locked') + (D.boss ? ' boss' : '');
+    const n = document.createElement('div'); n.textContent = open ? (D.boss ? '👑' : i + 1) : '🔒';
     const st = document.createElement('small');
-    st.textContent = !ready ? 'скоро' : open ? ('★'.repeat(STARS[i] || 0) + '☆'.repeat(3 - (STARS[i] || 0))) : '';
+    st.textContent = open ? ('★'.repeat(STARS[i] || 0) + '☆'.repeat(3 - (STARS[i] || 0))) : '';
     b.append(n, st);
-    b.addEventListener('click', () => { initAudio(); if (!ready) toast('Цей рівень ще будується 🔨'); else if (!open) toast('Спершу пройди попередній рівень'); else showIntro(i); });
+    b.addEventListener('click', () => { initAudio(); if (!open) toast('Спершу пройди попередній рівень'); else showIntro(i); });
     box.appendChild(b);
-  }
+  });
   const total = STARS.reduce((a, b) => a + (b || 0), 0);
-  $('menuNote').textContent = total ? `Зірок: ${total} з ${LEVELS.length * 3} · Влучань за весь час: ${totalHits}` : 'Підказка: можна влучити в мене дзеркалом. Але дзеркало може влучити в тебе 😏';
+  $('menuNote').textContent = total ? `Зірок: ${total} з ${LEVELS.length * 3} · Влучань за весь час: ${totalHits}` : 'Підказка: можна влучити в мене через дзеркало. Але дзеркало може влучити в тебе 😏';
   showOnly('menu');
 }
 function showIntro(i) {
   const D = LEVELS[i];
-  $('iNum').textContent = `Рівень ${i + 1}`;
+  $('iNum').textContent = D.boss ? 'Фінальний бос' : `Рівень ${i + 1}`;
   $('iName').textContent = D.name; $('iDesc').textContent = D.desc;
-  $('iGoal').textContent = `🎯 Влучань: ${D.goal}  ·  🍅 Помідорів: ${D.ammo}  ·  ❤️ 3`;
+  const g = $('iGoal'); g.innerHTML = '';
+  const goalTxt = D.boss ? `🎯 ${D.phases.length} фази` : `🎯 ${D.phases[0].goal} влуч.`;
+  [goalTxt, `🍅 ${D.ammo}`, '❤️ 3'].forEach(t => { const s = document.createElement('span'); s.textContent = t; g.appendChild(s); });
   $('iGo').onclick = () => { initAudio(); startLevel(i); };
   showOnly('intro');
 }
@@ -701,19 +852,20 @@ function showResult() {
   const D = L.D;
   if (L.win) {
     const frac = L.ammo / D.ammo;
-    const stars = frac >= 0.35 ? 3 : frac >= 0.12 ? 2 : 1;
+    const stars = frac >= 0.3 ? 3 : frac >= 0.1 ? 2 : 1;
     STARS[lvIdx] = Math.max(STARS[lvIdx] || 0, stars); save('pt_stars', STARS);
     SND.win(); buzz('win'); confetti();
-    if (lvIdx === LEVELS.length - 1 && LEVELS.length === PLANNED) { showFinal(); return; }
+    track('level_win', { lvl: lvIdx + 1, stars, ammo: L.ammo, lives: L.lives });
+    if (lvIdx === LEVELS.length - 1) { showFinal(); return; }
     $('rTitle').textContent = 'Рівень пройдено! 🎉';
     $('rStars').textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
     $('rText').textContent = stars === 3 ? 'Ідеально. Мені вже страшно.' : stars === 2 ? 'Непогано. Але на 3 зірки треба економніше 😏' : 'Пройдено, але на межі. Спробуєш на 3 зірки?';
-    const hasNext = lvIdx + 1 < LEVELS.length;
     $('rNext').classList.remove('hidden');
-    $('rNext').textContent = hasNext ? 'Далі ➜' : 'Фінал 🎁';
-    $('rNext').onclick = () => { if (hasNext) showIntro(lvIdx + 1); else showFinal(); };
+    $('rNext').textContent = 'Далі ➜';
+    $('rNext').onclick = () => showIntro(lvIdx + 1);
   } else {
     SND.lose(); buzz('bad');
+    track('level_lose', { lvl: lvIdx + 1, reason: L.lives <= 0 ? 'lives' : 'ammo', phase: L.phase + 1 });
     $('rTitle').textContent = L.lives <= 0 ? 'Життя закінчились 💔' : 'Помідори закінчились 🍅';
     $('rStars').textContent = '☆☆☆';
     $('rText').textContent = pick(CONFIG.phrases.lose);
@@ -724,35 +876,39 @@ function showResult() {
 }
 function showFinal() {
   state = 'final';
+  track('game_complete', { stars: STARS.reduce((a, b) => a + (b || 0), 0) });
   $('fTitle').textContent = CONFIG.finalTitle;
   $('fMsg').textContent = CONFIG.finalMessage; $('fMsg').classList.toggle('hidden', !CONFIG.finalMessage);
   const total = STARS.reduce((a, b) => a + (b || 0), 0);
-  $('fStats').textContent = (LEVELS.length < PLANNED ? 'Рівні 6–7 і бос ще будуються 🔨 · ' : '') + `Зірок: ${total} · Влучань за весь час: ${totalHits}`;
+  $('fStats').textContent = `Зірок: ${total} з ${LEVELS.length * 3} · Влучань за весь час: ${totalHits}`;
   const tg = $('fTg');
   if (/^[A-Za-z0-9_]{4,32}$/.test(CONFIG.telegram)) { tg.href = 'https://t.me/' + CONFIG.telegram; tg.textContent = CONFIG.telegramButton; tg.classList.remove('hidden'); }
   confetti();
   showOnly('final');
 }
 function taskText() {
-  const g = L.D.goal;
-  switch (lvIdx) {
-    case 0: return `🎯 Влуч у мене ${g} разів. Тягни палець НАЗАД від цілі і відпускай`;
-    case 1: return `🌬️ Влуч ${g} разів. Вітер зносить помідор — дивись на стрілку вгорі й цілься з поправкою`;
-    case 2: return `🪞 Влуч ${g} разів. У дзеркало не кидай — помідор полетить у тебе. Чекай, поки дзеркало відійде вбік`;
-    case 3: return `↘️ Влуч ${g} рази. Кидай високо у щілину біля червоної стрілки — дзеркало відіб’є помідор у печеру`;
-    case 4: return L.shield
-      ? `🎈 Крок 1: збий кульки по порядку — від найменшої відповіді до найбільшої (${L.next}/${L.order.length})`
-      : `🎯 Крок 2: купол зник! Влуч у мене ${g} рази`;
+  const g = L.pgoal, h = Math.min(L.phits, g), pre = L.D.boss ? `👑 Фаза ${L.phase + 1}/${L.D.phases.length} · ` : '';
+  switch (L.mode) {
+    case 'static': return `${pre}🎯 Влуч у мене ${g} разів. Тягни палець НАЗАД від цілі і відпускай`;
+    case 'wind': return `${pre}🌬️ Влуч ${g} разів. Вітер (стрілка вгорі) зносить помідор — цілься з поправкою`;
+    case 'mirror': return `${pre}🪞 Влуч ${g} разів. Не влуч у дзеркало — помідор полетить у тебе`;
+    case 'windmirror': return `${pre}🌬️🪞 Влуч ${g} рази: вітер + дзеркало одночасно`;
+    case 'cave': return `${pre}↘️ Влуч ${g} ${g > 4 ? 'разів' : 'рази'}. Кидай високо у щілину біля стрілки — дзеркало відіб’є помідор у печеру`;
+    case 'order': return L.shield
+      ? `${pre}🎈 Збий кульки від найменшої відповіді до найбільшої (${L.next}/${L.order.length})${L.P.timer ? ` · ⏱ ${Math.max(0, Math.ceil(L.orderT))} с` : ''}`
+      : `${pre}🎯 Купол зник! Влуч у мене ${g} рази`;
+    case 'clones': return `${pre}🧩 Правду каже лише справжній — вирахуй його й влуч (${h}/${g}). Копія = мінус життя`;
   }
   return '';
 }
-let lastTask = '';
-function updateHud() {
+let lastTaskKey = '';
+function updateHud(force) {
   if (!L) return;
-  const tt = taskText(), te = $('task');
-  if (tt !== lastTask) { te.textContent = tt; te.classList.remove('pulse'); void te.offsetWidth; te.classList.add('pulse'); lastTask = tt; }
+  const te = $('task'), key = L.mode + L.phase + (L.shield ? 's' : '') + (L.round || 0);
+  te.textContent = taskText();
+  if (force || key !== lastTaskKey) { te.classList.remove('pulse'); void te.offsetWidth; te.classList.add('pulse'); lastTaskKey = key; }
   te.classList.toggle('hidden', state !== 'play');
-  $('hInfo').textContent = `Рів. ${lvIdx + 1} · 🎯 ${Math.min(L.hits, L.D.goal)}/${L.D.goal}`;
+  $('hInfo').textContent = (L.D.boss ? `👑 Ф${L.phase + 1}/${L.D.phases.length}` : `Рів. ${lvIdx + 1}`) + ` · 🎯 ${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
   $('hAmmo').textContent = `${useSecret ? CONFIG.secretWeapon.emoji : '🍅'}${L.ammo} ${'❤️'.repeat(Math.max(0, L.lives))}${'🤍'.repeat(3 - Math.max(0, L.lives))}`;
   $('hSecret').classList.toggle('hidden', !secretUnlocked);
   $('hSecret').classList.toggle('on', useSecret);
@@ -787,16 +943,23 @@ document.addEventListener('gesturestart', e => e.preventDefault());
 /* ============================================================
    РЕНДЕР
    ============================================================ */
-let flash = 0;
 function drawBackground() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#fff0e8'); g.addColorStop(1, '#ffcdbd');
+  const boss = L && L.D.boss;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, boss ? '#f3e6ff' : '#fff0e8'); g.addColorStop(1, boss ? '#e7b9d8' : '#ffcdbd');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   ctx.setTransform(DPR * S, 0, 0, DPR * S, DPR * OX, DPR * OY);
-  // крапочки
   ctx.fillStyle = 'rgba(255,255,255,.5)';
   for (let y = -OY / S, row = 0; y < WH + OY / S; y += 36, row++) for (let x = -OX / S + (row % 2) * 18; x < WW + OX / S; x += 36) circ(x, y, 2.5);
-  // земля
+  if (L && L.mode === 'clones') {
+    // озеро
+    const lg = ctx.createLinearGradient(0, L.feet + 14, 0, GROUND);
+    lg.addColorStop(0, '#9fd6ff'); lg.addColorStop(1, '#5fa8e8');
+    ctx.fillStyle = lg; rr(-OX / S - 5, L.feet + 14, WW + 2 * OX / S + 10, GROUND - L.feet - 14, 0); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2;
+    for (let k = 0; k < 6; k++) { const yy = L.feet + 40 + k * 32, xx = ((time * 20 + k * 70) % 440) - 20; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + 30, yy); ctx.stroke(); }
+  }
   ctx.fillStyle = '#f2a08a'; ctx.fillRect(-OX / S - 5, GROUND, WW + 2 * OX / S + 10, WH - GROUND + OY / S + 5);
   ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(-OX / S - 5, GROUND, WW + 2 * OX / S + 10, 2);
 }
@@ -808,27 +971,25 @@ function drawPlatform() {
 }
 function drawSegs() {
   for (const s of L.segs) {
+    ctx.lineCap = 'round';
     if (s.type === 'wall') {
-      ctx.strokeStyle = '#8a6a5e'; ctx.lineWidth = 10; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
-      ctx.strokeStyle = '#a8877a'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+      ctx.strokeStyle = '#8a6a5e'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+      ctx.strokeStyle = '#a8877a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
     } else {
-      ctx.lineCap = 'round';
       ctx.strokeStyle = '#7b5a2a'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
       const gr = ctx.createLinearGradient(s.x1, s.y1, s.x2, s.y2);
       gr.addColorStop(0, '#e9f7ff'); gr.addColorStop(0.5, '#a9dcff'); gr.addColorStop(1, '#e9f7ff');
       ctx.strokeStyle = gr; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
-      const sh = (time * 0.6) % 1, hx = s.x1 + (s.x2 - s.x1) * sh, hy = s.y1 + (s.y2 - s.y1) * sh;
-      ctx.fillStyle = 'rgba(255,255,255,.9)'; circ(hx, hy, 2.5);
+      const sh = (time * 0.6) % 1;
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; circ(s.x1 + (s.x2 - s.x1) * sh, s.y1 + (s.y2 - s.y1) * sh, 2.5);
     }
   }
 }
 function drawGapHint() {
-  if (!L || lvIdx !== 3) return;
-  const a = 0.45 + Math.sin(time * 4) * 0.25, y = 395 + Math.sin(time * 4) * 5;
+  if (!L || L.mode !== 'cave') return;
+  const a = 0.45 + Math.sin(time * 4) * 0.25, y = 395 + Math.sin(time * 4) * 5, x = L.gapX;
   ctx.globalAlpha = a; ctx.strokeStyle = '#e8322c'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(372, y - 22); ctx.lineTo(372, y); ctx.moveTo(364, y - 8); ctx.lineTo(372, y); ctx.lineTo(380, y - 8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y - 22); ctx.lineTo(x, y); ctx.moveTo(x - 8, y - 8); ctx.lineTo(x, y); ctx.lineTo(x + 8, y - 8); ctx.stroke();
   ctx.globalAlpha = 1;
 }
 function drawShield() {
@@ -842,50 +1003,57 @@ function drawShield() {
 }
 function drawBalloons() {
   if (!L || !L.balloons.length) return;
-  if (L.shield) {
-    ctx.fillStyle = 'rgba(255,255,255,.85)'; rr(80, 398, 240, 24, 12); ctx.fill();
-    ctx.font = `800 12px ${UIFONT}`; ctx.fillStyle = '#5a3d36'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(`Від меншого до більшого: ${L.next}/${L.order.length}`, 200, 410);
-  }
   for (const b of L.balloons) {
     if (!b.alive) continue;
+    const r = b.r;
     ctx.strokeStyle = 'rgba(80,50,40,.5)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(b.x, b.y + 24); ctx.quadraticCurveTo(b.x + 6, b.y + 38, b.x, b.y + 52); ctx.stroke();
-    ctx.fillStyle = b.col; ell(b.x, b.y, 22, 25);
-    ctx.beginPath(); ctx.moveTo(b.x - 4, b.y + 27); ctx.lineTo(b.x + 4, b.y + 27); ctx.lineTo(b.x, b.y + 22); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.45)'; ell(b.x - 8, b.y - 10, 5, 8);
-    const fs = b.label.length > 6 ? 10 : 13;
+    ctx.beginPath(); ctx.moveTo(b.x, b.y + r + 2); ctx.quadraticCurveTo(b.x + 6, b.y + r + 16, b.x, b.y + r + 30); ctx.stroke();
+    ctx.fillStyle = b.col; ell(b.x, b.y, r, r * 1.14);
+    ctx.beginPath(); ctx.moveTo(b.x - 4, b.y + r * 1.2); ctx.lineTo(b.x + 4, b.y + r * 1.2); ctx.lineTo(b.x, b.y + r); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.45)'; ell(b.x - r * 0.36, b.y - r * 0.45, r * 0.22, r * 0.36);
+    const fs = b.label.length > 6 ? 10 : 12;
     ctx.font = `900 ${fs}px ${UIFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.strokeText(b.label, b.x, b.y);
     ctx.fillStyle = '#fff'; ctx.fillText(b.label, b.x, b.y);
   }
 }
+function drawStatements() {
+  if (!L || L.mode !== 'clones' || !L.puzzle) return;
+  const x = 12, y = 120, w = 376, lh = 24, h = lh * 3 + 18;
+  ctx.fillStyle = 'rgba(255,255,255,.93)'; rr(x, y, w, h, 14); ctx.fill();
+  ctx.strokeStyle = 'rgba(43,27,23,.15)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  L.puzzle.st.forEach((q, i) => {
+    const yy = y + 9 + lh * i + lh / 2;
+    ctx.fillStyle = '#2b1b17'; circ(x + 22, yy, 10);
+    ctx.fillStyle = '#fff'; ctx.font = `900 12px ${UIFONT}`; ctx.textAlign = 'center'; ctx.fillText(String(q.s), x + 22, yy + 1);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#2b1b17'; ctx.font = `700 14px ${UIFONT}`;
+    ctx.fillText(`«${q.text}»`, x + 40, yy + 1);
+  });
+}
 function drawWind() {
-  if (!L || !L.D.wind) return;
-  const w = L.wind, x = 200, y = 70;
-  ctx.fillStyle = 'rgba(255,255,255,.85)'; rr(x - 70, y - 16, 140, 32, 16); ctx.fill();
+  if (!L || !L.windOn) return;
+  const w = L.wind, x = 200, y = 92;
+  ctx.fillStyle = 'rgba(255,255,255,.88)'; rr(x - 70, y - 16, 140, 32, 16); ctx.fill();
   ctx.font = `800 12px ${UIFONT}`; ctx.fillStyle = '#5a3d36'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('ВІТЕР', x - 60, y);
-  const len = (w / 380) * 38;
+  const len = (w / 300) * 34;
   ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 4; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(x + 22 - len, y); ctx.lineTo(x + 22 + len, y); ctx.stroke();
   if (Math.abs(len) > 3) {
     const d = Math.sign(len), tip = x + 22 + len;
     ctx.beginPath(); ctx.moveTo(tip, y); ctx.lineTo(tip - d * 8, y - 6); ctx.moveTo(tip, y); ctx.lineTo(tip - d * 8, y + 6); ctx.stroke();
   }
-  // повітряні смужки
   ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2;
   for (let k = 0; k < 6; k++) {
-    const yy = 120 + k * 80, xx = ((time * w * 0.4 + k * 97) % 460 + 460) % 460 - 30;
+    const yy = 140 + k * 80, xx = ((time * w * 0.4 + k * 97) % 460 + 460) % 460 - 30;
     ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + Math.sign(w || 1) * 24, yy); ctx.stroke();
   }
 }
 function drawLauncher() {
   const x = LAUNCH.x, y = LAUNCH.y;
-  // ящик з помідорами
   ctx.fillStyle = '#b97a4a'; rr(x - 32, y + 12, 64, 26, 5); ctx.fill();
   ctx.strokeStyle = '#8c5a33'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 32, y + 25); ctx.lineTo(x + 32, y + 25); ctx.stroke();
-  // рогатка
   ctx.strokeStyle = '#6b4a2b'; ctx.lineWidth = 6; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(x, y + 14); ctx.lineTo(x, y - 2); ctx.moveTo(x, y - 2); ctx.lineTo(x - 14, y - 18); ctx.moveTo(x, y - 2); ctx.lineTo(x + 14, y - 18); ctx.stroke();
   let bx = x, by = y - 14;
@@ -896,7 +1064,6 @@ function drawLauncher() {
   ctx.strokeStyle = '#3a2a20'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(x - 14, y - 18); ctx.lineTo(bx, by); ctx.lineTo(x + 14, y - 18); ctx.stroke();
   if (L && L.ammo > 0 && cooldown <= 0) drawTomato(bx, by, 0, useSecret, false);
-  // анімована підказка-палець, поки не зроблено жодного кидка
   if (L && !drag && L.ammo === L.D.ammo && !L.done) {
     const k = (time % 1.6) / 1.6, e = k < 0.7 ? k / 0.7 : 1;
     const hx = x + 10 - e * 40, hy = y - 20 + e * 70;
@@ -908,7 +1075,6 @@ function drawLauncher() {
     ctx.font = `800 12px ${UIFONT}`; ctx.fillStyle = '#5a3d36';
     ctx.fillText('тягни назад і відпусти', x, y - 46);
   }
-  // підказка траєкторії
   if (drag && L) {
     const [vx, vy] = pullToVel(drag.x - drag.sx, drag.y - drag.sy);
     let px = x, py = y, pvx = vx, pvy = vy; const dt = 1 / 60, T = L.D.preview;
@@ -941,19 +1107,19 @@ function render() {
   if (L) {
     drawPlatform();
     drawWind();
+    drawStatements();
     wallSplats.filter(s => s.y < GROUND - 5).forEach(s => drawSplat(s, s.x, s.y));
-    drawChar();
+    if (L.clones) L.clones.forEach(drawChar); else drawChar(ch);
     drawShield();
     drawSegs();
     drawGapHint();
     drawBalloons();
-    wallSplats.filter(s => s.y >= GROUND - 5 || s.y > LAUNCH.y - 30).forEach(s => drawSplat(s, s.x, s.y));
+    wallSplats.filter(s => s.y >= GROUND - 5).forEach(s => drawSplat(s, s.x, s.y));
     drawLauncher();
     projs.forEach(p => drawTomato(p.x, p.y, p.rot, p.secret, p.golden));
   } else {
-    // меню: персонаж просто стоїть
     ch.y = 300 - R * 3.25 + 40; ch.x = 200;
-    drawChar();
+    drawChar(ch);
   }
   parts.forEach(drawPart);
   drawBubble();
@@ -962,22 +1128,22 @@ function render() {
 
 /* ---------- loop ---------- */
 function update(dt) {
-  ch.shake = Math.max(0, ch.shake - dt * 4); ch.squash = Math.max(0, ch.squash - dt * 2.5); ch.tilt *= Math.pow(0.02, dt);
-  if (ch.exprT > 0) ch.exprT -= dt;
-  ch.splats.forEach(s => s.age += dt);
+  decayChar(ch, dt);
+  if (L && L.clones) L.clones.forEach(c => decayChar(c, dt));
   for (let i = wallSplats.length - 1; i >= 0; i--) { wallSplats[i].age += dt; if (wallSplats[i].age > 5) wallSplats.splice(i, 1); }
   if (flash > 0) flash = Math.max(0, flash - dt);
   if (state === 'play' && L) {
     updateLevel(dt);
+    if (L.shieldPop > 0) L.shieldPop -= dt;
     if (cooldown > 0) cooldown -= dt;
     for (let i = projs.length - 1; i >= 0; i--) {
       const p = projs[i]; let res = 'ok';
       for (let k = 0; k < 4 && res === 'ok'; k++) res = stepProj(p, dt / 4);
       if (p.golden && Math.random() < 0.6) parts.push({ x: p.x, y: p.y, vx: rnd(-30, 30), vy: rnd(-30, 30), life: 0.4, max: 0.4, size: rnd(1.5, 3), color: '#ffd700', kind: 'star' });
-      if (res === 'gone' || p.age > 8) projs.splice(i, 1);
+      if (res === 'gone' || p.age > 8) { const k = projs.indexOf(p); if (k >= 0) projs.splice(k, 1); }
     }
     checkOutOfAmmo();
-    if (!L.done && L.t - L.lastAct > 8 && !bubble) { sayPick(CONFIG.phrases.idle); L.lastAct = L.t; }
+    if (!L.done && !L.busy && L.t - L.lastAct > 9 && !bubble && !L.clones) { sayPick(CONFIG.phrases.idle); L.lastAct = L.t; }
     if (L.done && endTimer > 0) { endTimer -= dt; if (endTimer <= 0) showResult(); }
   }
   for (let i = parts.length - 1; i >= 0; i--) {
@@ -996,6 +1162,7 @@ function frame(now) {
 }
 window.addEventListener('resize', resize);
 resize(); buildMenu();
+track('open');
 requestAnimationFrame(frame);
 </script>
 </body>
