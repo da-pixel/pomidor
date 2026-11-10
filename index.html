@@ -18,6 +18,9 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 #hInfo{flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis}
 #hSecret{border:none;font-size:18px;padding:6px 10px}
 #hSecret.on{box-shadow:0 0 0 3px #f7b8c4}
+#hPower{border:none;font-family:inherit;font-weight:800;font-size:14px;padding:6px 10px;color:var(--ink)}
+#hPower.ready{background:#3d7bff;color:#fff;animation:pw .7s ease-in-out infinite}
+@keyframes pw{50%{transform:scale(1.12);box-shadow:0 0 0 4px rgba(61,123,255,.35)}}
 #task{position:fixed;left:10px;right:10px;top:calc(env(safe-area-inset-top) + 58px);margin:0 auto;max-width:420px;background:rgba(43,27,23,.86);color:#fff;border-radius:14px;padding:8px 12px;font-weight:700;font-size:14px;line-height:1.3;text-align:center;pointer-events:none;z-index:3}
 #task.pulse{animation:tp .6s ease 2}
 @keyframes tp{50%{transform:scale(1.05);background:#e8322c}}
@@ -38,6 +41,17 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 .goal{gap:6px}
 .goal span{background:#fff0e6;border-radius:12px;padding:8px 8px;font-weight:800;font-size:14px;white-space:nowrap}
 .stars{font-size:38px;letter-spacing:4px;margin:6px 0}
+#rTitle.died{color:#b3121a;font-size:30px;letter-spacing:2px;font-weight:900}
+#rTitle.died + .stars{font-size:18px;letter-spacing:0;font-weight:800;color:#8a6a60}
+.screen.clear{background:linear-gradient(to bottom,rgba(43,27,23,0) 45%,rgba(43,27,23,.3));align-items:flex-end}
+.end-line{font-size:20px!important;font-weight:800;color:var(--ink)!important}
+.coupon{position:relative;background:#fffdf6;border:3px dashed #e8322c;padding:24px 20px 18px}
+.coupon:before,.coupon:after{content:'';position:absolute;top:50%;width:26px;height:26px;border-radius:50%;background:rgba(43,27,23,.35);transform:translateY(-50%)}
+.coupon:before{left:-15px}.coupon:after{right:-15px}
+.cp-top{font-size:13px;font-weight:900;letter-spacing:3px;color:#e8322c}
+.cp-prize{font-size:22px;font-weight:900;margin:8px 0 6px;line-height:1.2}
+.cp-meta{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#8a6a60;border-top:1px dashed #f0ddd5;padding-top:8px;margin-top:10px}
+.cp-stamp{display:inline-block;border:3px solid #1a9b4b;color:#1a9b4b;font-weight:900;font-size:20px;padding:4px 12px;border-radius:10px;transform:rotate(-8deg);margin:8px 0}
 .btn{display:block;width:100%;padding:14px;border:none;border-radius:16px;background:var(--accent);color:#fff;font-size:18px;font-weight:800;text-decoration:none;margin-top:10px;font-family:inherit;box-shadow:0 4px 0 #b11f1a;cursor:pointer}
 .btn:active{transform:translateY(2px);box-shadow:0 2px 0 #b11f1a}
 .btn.ghost{background:#fff;color:var(--ink);box-shadow:0 4px 0 #e6cfc6;border:2px solid #f0ddd5}
@@ -72,6 +86,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
   <button class="pill" id="hMenu" aria-label="Меню">☰</button>
   <div class="pill" id="hInfo"></div>
   <button class="pill hidden" id="hSecret" aria-label="Секретна зброя">🧠</button>
+  <button class="pill hidden" id="hPower" aria-label="Суперсила Град">🌧️</button>
   <div class="pill" id="hAmmo"></div>
 </div>
 <div id="task" class="hidden"></div>
@@ -111,6 +126,21 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
   <div class="row"><button class="btn ghost" id="rRetry">Ще раз</button><button class="btn ghost" id="rMenu">Меню</button></div>
 </div></div>
 
+<div class="screen clear hidden" id="ending"><div class="card">
+  <p class="end-line" id="eLine"></p>
+  <div class="row"><button class="btn" id="eYes">Так 😏</button><button class="btn ghost" id="eThink">Подумаю…</button></div>
+</div></div>
+
+<div class="screen hidden" id="coupon"><div class="card coupon">
+  <div class="cp-top">🎟 КУПОН</div>
+  <div class="cp-prize" id="cpPrize"></div>
+  <p id="cpText"></p>
+  <div id="cpStamp" class="cp-stamp hidden">АКТИВОВАНО ✅</div>
+  <button class="btn" id="cpGo">Активувати</button>
+  <button class="btn ghost hidden" id="cpNext">Далі ➜</button>
+  <div class="cp-meta"><span id="cpNum"></span><span id="cpDate"></span></div>
+</div></div>
+
 <div class="screen hidden" id="final"><div class="card">
   <div class="stars">🍅🍅🍅</div>
   <h2 id="fTitle"></h2>
@@ -128,6 +158,9 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 const CONFIG = {
   greeting: 'Привіт, Юстино 👋',
   finalTitle: 'Ну що, нарциско, полегшало? 😏',
+  // Фінал після боса: 'cutscene' — катсцена «Его розбите» з кнопками; 'coupon' — купон; 'both' — спершу катсцена, потім купон
+  ending: 'cutscene',
+  coupon: { prize: 'Одна кава, прогулянка або кіно — на твій вибір', days: 14 },
   finalMessage: '',
   telegram: '',                     // юзернейм БЕЗ @ для кнопки у фіналі (порожньо = без кнопки)
   telegramButton: 'Написати йому 💬',
@@ -153,6 +186,8 @@ const CONFIG = {
     win:     ['Гаразд, цей рівень твій', 'Поважаю', 'Влучність — 10/10', 'Ти страшна людина 😅'],
     lose:    ['Ще раз? Я нікуди не дінуся', 'Помідори закінчились, его — ні 😏', 'Дзеркало перемогло. Поки що'],
     secret:  ['ЦЕ НЕЧЕСНО 😂', 'Психологія, серйозно?!', 'Не аналізуй мене!', 'Це що, сеанс терапії?'],
+    dodge:   ['Хе, мимо 😎', 'Не сьогодні', 'Передбачуваний кидок 😏', 'Матриця', 'Читаю тебе як книжку'],
+    died:    ['Его перемогло. Поки що 😏', 'Ще одна спроба?', 'Справжні нарциси не здаються', 'Майже! Ну, ні 😅'],
   },
 };
 
@@ -178,14 +213,17 @@ const LEVELS = [
   { name: 'Озеро Нарциса', ammo: 16, preview: 0.28,
     phases: [{ mode: 'clones', goal: 3 }],
     desc: 'Біля озера троє мене. Двоє — відображення, і вони завжди брешуть. Справжній — єдиний, хто каже правду. Прочитай, що кажуть усі троє, вирахуй справжнього й влуч. Вони ще й міняються місцями. Влучиш у копію — мінус життя.' },
-  { name: 'Бос: Его', ammo: 48, preview: 0.25, boss: true, timeLimit: 120,
+  { name: 'Бос: Его', ammo: 55, preview: 0, boss: true, timeLimit: 150,
     phases: [
-      { mode: 'carousel', goal: 3, rings: [{ r: 2.1, sp: 1.3, ph: 0, len: 2.6 }, { r: 2.1, sp: 1.3, ph: Math.PI, len: 2.6 }, { r: 3.1, sp: -0.8, ph: 1, len: 3.2 }] },
-      { mode: 'teleport', goal: 3, every: 1.7 },
-      { mode: 'clones', goal: 2, fast: true, windMax: 140 },
-      { mode: 'invisible', goal: 3 },
+      { mode: 'carousel', goal: 3, move: 0.9, dodge: 0.55, dodgeCd: 1.3,
+        rings: [{ r: 2.0, sp: 1.7, ph: 0, len: 2.8 }, { r: 2.0, sp: 1.7, ph: Math.PI, len: 2.8 }, { r: 3.0, sp: -1.15, ph: 1, len: 3.4 }, { r: 3.0, sp: -1.15, ph: 1 + Math.PI, len: 3.4 }] },
+      { mode: 'teleport', goal: 3, every: 1.35, warn: 0.5, windMax: 140, smart: 0.5 },
+      { mode: 'clones', goal: 3, fast: true, windMax: 180 },
+      { mode: 'invisible', goal: 3, dodge: 0.55, dodgeCd: 1.4 },
+      { mode: 'fury', goal: 3, every: 1.6, warn: 0.5, smart: 0.4, dodge: 0.6, dodgeCd: 1.2,
+        rings: [{ r: 2.1, sp: 2.1, ph: 0, len: 2.6 }, { r: 2.1, sp: 2.1, ph: Math.PI, len: 2.6 }] },
     ],
-    desc: 'Фінальний бос — моє его 👑 На весь бій — 2 хвилини. Фаза 1: дзеркальна карусель. Фаза 2: телепорт — кидай туди, де спалахне коло. Фаза 3: доппельгангери під вітром. Фаза 4: справжнє его невидиме — шукай його за відображенням в озері.' },
+    desc: 'Фінальний бос — моє его 👑 Він читає твої кидки й ухиляється, а підказки траєкторії немає. 5 фаз за 2:30: дзеркальна карусель → телепорт → доппельгангери → невидиме его → ЛЮТЬ. Попадання заряджають суперсилу «🌧️ Град». Готуйся до багатьох спроб 💀' },
 ];
 
 /* ============================================================ */
@@ -241,6 +279,7 @@ function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch 
 let STARS = load('pt_stars', []);
 let totalHits = load('pt_total', 0);
 let secretUnlocked = load('pt_secret', false), useSecret = false, goldenIdx = 0;
+let ATT = load('pt_att', {});
 
 /* ---------- sound ---------- */
 let actx = null, noiseBuf = null;
@@ -331,6 +370,7 @@ const CURLS = [];
 for (let i = 0; i < 26; i++) CURLS.push({ a: Math.PI * (1.02 + i / 25 * 0.96), d: rnd(0.98, 1.12), s: rnd(0.2, 0.28) });
 for (let i = 0; i < 12; i++) CURLS.push({ a: Math.PI * rnd(1.15, 1.85), d: rnd(0.55, 0.85), s: rnd(0.22, 0.3) });
 
+let hideHang = false;
 function newChar(num) { return { x: 200, y: 300, shake: 0, squash: 0, tilt: 0, expr: 'idle', exprT: 0, splats: [], num: num || 0, tx: 200, slot: 0 }; }
 const ch = newChar();
 
@@ -365,7 +405,7 @@ function drawBody(expr) {
   ctx.lineTo(r * 1.12, r * 1.4); ctx.quadraticCurveTo(r * 1.1, r * 0.86, r * 0.45, r * 0.82); ctx.closePath(); ctx.fill();
   ctx.fillStyle = L.topDark; rr(-r * 1.06, r * 2.3, r * 2.12, r * 0.2, r * 0.08); ctx.fill();
   ctx.fillStyle = L.topDark; rr(-r * 0.4, r * 0.62, r * 0.8, r * 0.36, r * 0.16); ctx.fill();
-  if (expr !== 'cool') drawGlasses(r * 0.08, r * 1.15, r * 0.62, true);
+  if (expr !== 'cool' && !hideHang) drawGlasses(r * 0.08, r * 1.15, r * 0.62, true);
   drawArm(-1, expr === 'shock'); drawArm(1, expr === 'shock');
 }
 function drawHair(back) {
@@ -477,7 +517,7 @@ function drawChar(c) {
   ctx.globalAlpha = 1;
 }
 function drawTeleportPads() {
-  if (!L || L.mode !== 'teleport') return;
+  if (!L || (L.mode !== 'teleport' && L.mode !== 'fury')) return;
   L.spots.forEach((s, i) => {
     const fy = s.y + R * 3.25;
     ctx.fillStyle = 'rgba(160,140,255,.35)'; ell(s.x, fy + 4, R * 1.4, R * 0.3);
@@ -585,7 +625,7 @@ let drag = null, cooldown = 0, endTimer = 0, flash = 0;
 
 function startLevel(i) {
   lvIdx = i; const D = LEVELS[i];
-  L = { D, ammo: D.ammo, lives: 3, phase: 0, phits: 0, totalHits: 0, t: 0, done: false, busy: false, lastAct: 0, transT: 0, puzzleT: 0, timeLeft: D.timeLimit };
+  L = { D, ammo: D.ammo, lives: 3, phase: 0, phits: 0, totalHits: 0, t: 0, done: false, busy: false, lastAct: 0, transT: 0, puzzleT: 0, timeLeft: D.timeLimit, power: 0, hail: null };
   projs.length = 0; parts.length = 0; wallSplats.length = 0; bubble = null; drag = null; cooldown = 0; endTimer = 0;
   setupPhase();
   state = 'play';
@@ -623,15 +663,17 @@ function setupPhase() {
     case 'order': feet = 380; ch.x = 200; L.plat = { x: 200, w: 270 }; L.shield = true; makeBalloons(P); if (P.timer) L.orderT = P.timer; break;
     case 'clones': feet = 400; L.plat = { x: 200, w: 370 }; makeClones(); if (P.windMax) L.windOn = true; break;
     case 'carousel': feet = 360; ch.x = 200; L.plat = { x: 200, w: 200 }; break;
-    case 'teleport': {
-      L.spots = [{ x: 80, y: 250 }, { x: 200, y: 200 }, { x: 320, y: 250 }, { x: 110, y: 390 }, { x: 290, y: 390 }];
-      L.tpCur = Math.floor(Math.random() * 5); L.tpNext = null; L.tpT = P.every;
+    case 'teleport': case 'fury': {
+      L.spots = [{ x: 80, y: 250 }, { x: 200, y: 200 }, { x: 320, y: 250 }, { x: 110, y: 390 }, { x: 290, y: 390 }, { x: 200, y: 330 }];
+      L.tpCur = Math.floor(Math.random() * L.spots.length); L.tpNext = null; L.tpT = P.every;
       ch.x = L.spots[L.tpCur].x; ch.y = L.spots[L.tpCur].y; feet = ch.y + R * 3.25;
+      if (P.windMax) L.windOn = true;
       break;
     }
     case 'invisible': feet = 330; ch.x = 200; L.plat = { x: 200, w: 380 }; L.reveal = 0.8; break;
   }
-  L.feet = feet; if (P.mode !== 'teleport') ch.y = feet - R * 3.25;
+  L.dg = { off: 0, target: 0, t: 0, cd: 0.8 };
+  L.feet = feet; if (P.mode !== 'teleport' && P.mode !== 'fury') ch.y = feet - R * 3.25;
   if (L.plat) L.plat.y = feet;
   if (L.clones) L.clones.forEach(c => c.y = ch.y);
 }
@@ -701,8 +743,89 @@ function updateWind(dt) {
   if (L.windT <= 0) { const m = L.P.windMax; L.windTarget = Math.round(rnd(-m, m) / 20) * 20; L.windT = rnd(3, 4.5); }
   L.wind += (L.windTarget - L.wind) * Math.min(1, dt * 2.5);
 }
+/* --- бос: дзеркала, телепорт, ухиляння, град --- */
+function setRings(P) {
+  const cx = ch.x, cy = ch.y + R * 1.1, t = L.t;
+  L.segs = P.rings.map(g => {
+    const a = g.ph + t * g.sp, mx = cx + Math.cos(a) * R * g.r, my = cy + Math.sin(a) * R * g.r * 1.15;
+    const tx = -Math.sin(a), ty = Math.cos(a), hl = R * g.len / 2;
+    return { x1: mx - tx * hl, y1: my - ty * hl, x2: mx + tx * hl, y2: my + ty * hl, type: 'mirror', held: true };
+  });
+}
+function pickSpot() { let n; do { n = Math.floor(Math.random() * L.spots.length); } while (n === L.tpCur); return n; }
+function tpStep(dt, P) {
+  if (L.busy) return;
+  L.tpT -= dt;
+  if (L.tpT < (P.warn || 0.7) && L.tpNext === null) L.tpNext = pickSpot();
+  if (L.tpT <= 0 && L.tpNext !== null) {
+    burst(ch.x, ch.y + R, ['#c7b8ff', '#ffffff', '#ffd6f5'], 18, true);
+    L.tpCur = L.tpNext; L.tpNext = null; L.dg.off = 0; L.dg.target = 0;
+    const s = L.spots[L.tpCur];
+    burst(s.x, s.y + R, ['#c7b8ff', '#ffffff', '#ffd6f5'], 18, true); SND.swap();
+    L.tpT = P.every * rnd(0.85, 1.1);
+  }
+}
+function predictHit(p) {
+  let x = p.x, y = p.y, vx = p.vx, vy = p.vy; const dt = 1 / 60, w = L.windOn ? L.wind : 0;
+  for (let t = 0; t < 0.6; t += dt) {
+    vx += w * dt; vy += G * dt; x += vx * dt; y += vy * dt;
+    if (onChar(x, y, PR * 0.5 + 4)) return { t, x };
+    if (y > GROUND) return null;
+  }
+  return null;
+}
+// Бос «читає» кидки: ухиляється або телепортується раніше
+function bossAI() {
+  const P = L.P;
+  if (!L.D.boss || L.busy || L.done || L.clones || (!P.dodge && !P.smart)) return;
+  for (const p of projs) {
+    if (p.ai) continue;
+    const h = predictHit(p);
+    if (!h || h.t > 0.55) continue;
+    p.ai = true;
+    if (h.t < 0.12) continue;
+    if (P.smart && L.tpNext === null && Math.random() < P.smart) { L.tpNext = pickSpot(); L.tpT = Math.min(L.tpT, 0.12); continue; }
+    if (P.dodge && L.dg.cd <= 0 && Math.random() < P.dodge) {
+      let dir = Math.random() < 0.25 ? (Math.random() < 0.5 ? -1 : 1) : (h.x < ch.x ? 1 : -1);
+      const base = ch.x - L.dg.off;
+      if (base + dir * R * 2.8 > WW - R * 1.4 || base + dir * R * 2.8 < R * 1.4) dir = -dir;
+      L.dg.target = dir * R * 2.8; L.dg.t = 0.75; L.dg.cd = P.dodgeCd || 1.2;
+      SND.swap();
+      if (L.mode !== 'invisible') { setExpr('cool', 0.7); if (Math.random() < 0.5) sayPick(CONFIG.phrases.dodge, 1.2); }
+    }
+  }
+}
+function updateDodge(dt) {
+  const d = L.dg; if (!d) return;
+  d.cd -= dt;
+  if (d.t > 0) { d.t -= dt; if (d.t <= 0) d.target = 0; }
+  d.off += (d.target - d.off) * Math.min(1, dt * 14);
+}
+const POWER_MAX = 4;
+function chargePower() {
+  if (!L.D.boss || L.hail) return;
+  const was = L.power; L.power = Math.min(POWER_MAX, L.power + 1);
+  if (L.power === POWER_MAX && was < POWER_MAX) { toast('🌧️ Град заряджено — тисни кнопку вгорі!'); SND.unlock && SND.unlock(); }
+  updateHud();
+}
+function castHail() {
+  if (!L || !L.D.boss || L.power < POWER_MAX || L.busy || L.done) return;
+  L.power = 0; L.hail = { left: 12, t: 0, hits: 0 };
+  toast('🌧️ ГРАД ПОМІДОРІВ!'); SND.golden(); buzz('win'); updateHud();
+}
+function hailStep(dt) {
+  const h = L.hail; if (!h) return;
+  if (h.left <= 0) { if (!projs.some(p => p.hail)) { L.hail = null; updateHud(); } return; }
+  h.t -= dt; if (h.t > 0) return;
+  h.t = 0.09; h.left--;
+  const tx = L.clones ? 200 : ch.x;
+  projs.push({ x: tx + rnd(-75, 75), y: -30, vx: rnd(-25, 25), vy: rnd(250, 380), rot: 0, spin: rnd(6, 12), golden: false, secret: false, reflected: false, age: 0, hail: true });
+}
+function hailCounts() { return !!(L.hail && L.hail.hits++ < 2); }
+
 function updateLevel(dt) {
   L.t += dt; const t = L.t, P = L.P;
+  updateDodge(dt);
   switch (L.mode) {
     case 'static': ch.x = 290 + Math.sin(t * 0.6) * 10; break;
     case 'wind': ch.x = 200 + Math.sin(t * P.speed) * 115; updateWind(dt); break;
@@ -718,30 +841,18 @@ function updateLevel(dt) {
         else if (Math.ceil(L.orderT) !== before) updateHud();
       }
       break;
-    case 'carousel': {
-      ch.x = 200 + Math.sin(t * 0.5) * 50;
-      const cx = ch.x, cy = ch.y + R * 1.1;
-      L.segs = P.rings.map(g => {
-        const a = g.ph + t * g.sp, mx = cx + Math.cos(a) * R * g.r, my = cy + Math.sin(a) * R * g.r * 1.15;
-        const tx = -Math.sin(a), ty = Math.cos(a), hl = R * g.len / 2;
-        return { x1: mx - tx * hl, y1: my - ty * hl, x2: mx + tx * hl, y2: my + ty * hl, type: 'mirror', held: true };
-      });
+    case 'carousel':
+      ch.x = clamp(200 + Math.sin(t * (P.move || 0.5)) * 60 + L.dg.off, R * 1.4, WW - R * 1.4);
+      setRings(P);
       break;
-    }
-    case 'teleport': {
-      if (L.busy) break;
-      L.tpT -= dt;
-      if (L.tpT < 0.7 && L.tpNext === null) { let n; do { n = Math.floor(Math.random() * L.spots.length); } while (n === L.tpCur); L.tpNext = n; }
-      if (L.tpT <= 0) {
-        burst(ch.x, ch.y + R, ['#c7b8ff', '#ffffff', '#ffd6f5'], 18, true);
-        L.tpCur = L.tpNext; L.tpNext = null; ch.x = L.spots[L.tpCur].x; ch.y = L.spots[L.tpCur].y;
-        burst(ch.x, ch.y + R, ['#c7b8ff', '#ffffff', '#ffd6f5'], 18, true); SND.swap();
-        L.tpT = P.every * rnd(0.85, 1.1);
-      }
+    case 'teleport': case 'fury':
+      if (L.windOn) updateWind(dt);
+      tpStep(dt, P);
+      ch.x = clamp(L.spots[L.tpCur].x + L.dg.off, R * 1.4, WW - R * 1.4); ch.y = L.spots[L.tpCur].y;
+      if (L.mode === 'fury') setRings(P);
       break;
-    }
     case 'invisible':
-      ch.x = 200 + Math.sin(t * 0.8) * 110 + Math.sin(t * 1.9) * 30;
+      ch.x = clamp(200 + Math.sin(t * 1.0) * 105 + Math.sin(t * 2.3) * 30 + L.dg.off, R * 1.4, WW - R * 1.4);
       if (L.reveal > 0) L.reveal -= dt;
       break;
     case 'clones': {
@@ -752,7 +863,7 @@ function updateLevel(dt) {
           const a = Math.floor(Math.random() * 3); let b = (a + 1 + Math.floor(Math.random() * 2)) % 3;
           const ca = L.clones.find(c => c.slot === a), cb = L.clones.find(c => c.slot === b);
           ca.slot = b; cb.slot = a; SND.swap();
-          L.shufT = P.fast ? Math.max(1.1, 1.9 - L.round * 0.3) : Math.max(1.6, 2.6 - L.round * 0.35);
+          L.shufT = P.fast ? Math.max(0.9, 1.5 - L.round * 0.25) : Math.max(1.6, 2.6 - L.round * 0.35);
         }
       }
       L.clones.forEach((c, i) => {
@@ -842,8 +953,10 @@ function scoreHit(p, c) {
 }
 function hitChar(p) {
   if (L.busy || L.done) return;
+  if (p.hail && !hailCounts()) { scoreHit(p, ch); if (L.mode === 'invisible') L.reveal = 0.3; return; }
   scoreHit(p, ch); SND.good(Math.min(L.phits, 4));
   if (L.mode === 'invisible') L.reveal = 0.7;
+  if (!p.hail) chargePower();
   const gain = p.golden ? 2 : 1;
   L.phits += gain; L.totalHits += gain;
   if (p.golden) goldenHit();
@@ -855,6 +968,8 @@ function hitClone(c, p) {
   if (L.busy || L.done) return;
   scoreHit(p, c);
   if (c.num === L.realNum) {
+    if (p.hail && !hailCounts()) return;
+    if (!p.hail) chargePower();
     L.phits++; L.totalHits++; L.round++; SND.good(L.phits);
     setExpr('hit', 1, c); sayPick(CONFIG.phrases.real, 1.6, c);
     updateHud(); checkEnd();
@@ -915,11 +1030,11 @@ function checkOutOfAmmo() {
 }
 
 /* ---------- екрани ---------- */
-const SCREENS = ['menu', 'intro', 'result', 'final', 'admin'];
+const SCREENS = ['menu', 'intro', 'result', 'final', 'admin', 'ending', 'coupon'];
 function showOnly(id) { SCREENS.forEach(s => $(s).classList.toggle('hidden', s !== id)); if (id) { $('hud').classList.add('hidden'); $('task').classList.add('hidden'); } }
 function isOpen(i) { return i === 0 || (STARS[i - 1] || 0) > 0; }
 function buildMenu() {
-  state = 'menu'; L = null; projs.length = 0; bubble = null;
+  state = 'menu'; L = null; E = null; projs.length = 0; bubble = null; hideHang = false;
   $('hi').textContent = CONFIG.greeting;
   const box = $('levels'); box.innerHTML = '';
   LEVELS.forEach((D, i) => {
@@ -973,7 +1088,9 @@ function describeEvent(ev) {
     case 'level_win': return `✅ пройшла ${lvlName(ev.lvl)} ${st(ev.stars)} (🍅${ev.ammo} ❤️${ev.lives})`;
     case 'level_lose': return `❌ програла ${lvlName(ev.lvl)}${ev.phase > 1 ? ` на фазі ${ev.phase}` : ''}: ${ev.reason === 'lives' ? 'життя скінчились' : ev.reason === 'time' ? 'час вийшов' : 'помідори скінчились'}`;
     case 'boss_phase': return `👑 бос: фаза ${ev.phase}`;
-    case 'game_complete': return '🏆 пройшла всю гру!';
+    case 'game_complete': return `🏆 пройшла всю гру!${ev.deaths ? ` (смертей на босі: ${ev.deaths})` : ''}`;
+    case 'final_answer': return ev.a === 'yes' ? '💬 відповіла «Так 😏»' : '💬 відповіла «Подумаю…»';
+    case 'coupon': return '🎟 активувала купон';
   }
   return ev.e;
 }
@@ -1022,7 +1139,7 @@ $('admRefresh').addEventListener('click', loadAdmin);
 $('admClose').addEventListener('click', buildMenu);
 function showIntro(i) {
   const D = LEVELS[i];
-  $('iNum').textContent = D.boss ? 'Фінальний бос' : `Рівень ${i + 1}`;
+  $('iNum').textContent = D.boss ? `Фінальний бос${ATT[i] ? ` · смертей: ${ATT[i]} 💀` : ''}` : `Рівень ${i + 1}`;
   $('iName').textContent = D.name; $('iDesc').textContent = D.desc;
   const g = $('iGoal'); g.innerHTML = '';
   const chips = D.boss ? [`🎯 ${D.phases.length} фази`, `⏱ ${Math.floor(D.timeLimit / 60)}:${String(D.timeLimit % 60).padStart(2, '0')}`, `🍅 ${D.ammo}`, '❤️ 3'] : [`🎯 ${D.phases[0].goal} влуч.`, `🍅 ${D.ammo}`, '❤️ 3'];
@@ -1034,10 +1151,12 @@ $('iBack').onclick = buildMenu;
 $('rMenu').onclick = buildMenu;
 $('fMenu').onclick = buildMenu;
 $('hMenu').addEventListener('pointerdown', e => { e.stopPropagation(); buildMenu(); });
+$('hPower').addEventListener('pointerdown', e => { e.stopPropagation(); castHail(); });
 $('hSecret').addEventListener('pointerdown', e => { e.stopPropagation(); useSecret = !useSecret; updateHud(); toast(useSecret ? `${CONFIG.secretWeapon.emoji} ${CONFIG.secretWeapon.name}: увімкнено` : '🍅 Звичайні помідори'); });
 
 function showResult() {
   state = 'result';
+  $('rTitle').classList.remove('died');
   const D = L.D;
   if (L.win) {
     const frac = L.ammo / D.ammo;
@@ -1045,7 +1164,7 @@ function showResult() {
     STARS[lvIdx] = Math.max(STARS[lvIdx] || 0, stars); save('pt_stars', STARS);
     SND.win(); buzz('win'); confetti();
     track('level_win', { lvl: lvIdx + 1, stars, ammo: L.ammo, lives: L.lives });
-    if (lvIdx === LEVELS.length - 1) { showFinal(); return; }
+    if (D.boss) { startEnding(); return; }
     $('rTitle').textContent = 'Рівень пройдено! 🎉';
     $('rStars').textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
     $('rText').textContent = stars === 3 ? 'Ідеально. Мені вже страшно.' : stars === 2 ? 'Непогано. Але на 3 зірки треба економніше 😏' : 'Пройдено, але на межі. Спробуєш на 3 зірки?';
@@ -1060,17 +1179,138 @@ function showResult() {
     $('rStars').textContent = '☆☆☆';
     $('rText').textContent = pick(CONFIG.phrases.lose);
     $('rNext').classList.add('hidden');
+    ATT[lvIdx] = (ATT[lvIdx] || 0) + 1; save('pt_att', ATT);
+    $('rTitle').classList.toggle('died', !!D.boss);
+    if (D.boss) {
+      const why = reason === 'lives' ? 'життя скінчились' : reason === 'time' ? 'час вийшов' : 'помідори скінчились';
+      $('rTitle').textContent = 'ТИ ЗАГИНУЛА 💀';
+      $('rStars').textContent = `Спроба №${ATT[lvIdx]}`;
+      $('rText').textContent = `Фаза ${L.phase + 1} з ${D.phases.length} · ${why}. ${pick(CONFIG.phrases.died)}`;
+    }
   }
   $('rRetry').onclick = () => startLevel(lvIdx);
   showOnly('result');
 }
-function showFinal() {
+/* ---------- фінал після боса ---------- */
+let E = null;
+function startEnding() {
+  state = 'ending'; E = { t: 0, shards: [], shattered: false, said: false, cracks: [], cr: 0 };
+  $('hud').classList.add('hidden'); $('task').classList.add('hidden');
+  projs.length = 0; bubble = null; ch.splats = []; ch.exprT = 0; hideHang = false;
+  track('game_complete', { stars: STARS.reduce((a, b) => a + (b || 0), 0), deaths: ATT[lvIdx] || 0 });
+  if (CONFIG.ending === 'coupon') { E.shattered = true; E.said = true; E.t = 5; showCoupon(); return; }
+  // тріщини від точки удару
+  for (let k = 0; k < 9; k++) {
+    let x = 210, y = 270, a = k / 9 * TAU + rnd(-0.2, 0.2); const pts = [[x, y]];
+    for (let s = 0; s < 5; s++) { a += rnd(-0.45, 0.45); x += Math.cos(a) * rnd(14, 26); y += Math.sin(a) * rnd(14, 26); pts.push([x, y]); }
+    E.cracks.push(pts);
+  }
+  showOnly(null);
+}
+function shatter() {
+  E.shattered = true;
+  for (let i = 0; i < 28; i++) {
+    const x = 200 + rnd(-80, 80), y = 300 + rnd(-120, 120), s = rnd(9, 22);
+    E.shards.push({ x, y, vx: (x - 200) * rnd(3, 6) + rnd(-40, 40), vy: (y - 300) * rnd(1.5, 3) - rnd(150, 320), rot: rnd(0, TAU), vr: rnd(-9, 9),
+      pts: [[rnd(-s, s), -s], [s, rnd(-s, s)], [rnd(-s, s), s * 0.8]] });
+  }
+  nz(0.7, 7000, 900, 0.6, 'highpass'); tn(140, 60, 0.4, 0.3, 'sine'); buzz('win');
+  confetti(); E.flash = 0.8;
+}
+function updateEnding(dt) {
+  E.t += dt; const t = E.t;
+  if (!E.shattered) {
+    const n = Math.floor(clamp((t - 0.3) / 0.9, 0, 1) * E.cracks.length);
+    if (n > E.cr) { E.cr = n; SND.clink(); }
+    if (t >= 1.3) shatter();
+  }
+  E.shards.forEach(s => { s.vy += G * 0.7 * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.rot += s.vr * dt; });
+  if (E.flash > 0) E.flash -= dt * 1.5;
+  if (t >= 3.3 && !E.said) { E.said = true; ch.x = 200; say(CONFIG.finalTitle, 999); SND.win(); }
+  if (t >= 3.9 && $('ending').classList.contains('hidden') && state === 'ending') {
+    $('eLine').textContent = 'Відповідай чесно 😏';
+    showOnly('ending');
+  }
+}
+function drawGoldFrame(alpha) {
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#c99a2e'; rr(105, 155, 190, 290, 22); ctx.fill();
+  ctx.fillStyle = '#f2cf63'; rr(111, 161, 178, 278, 18); ctx.fill();
+  ctx.fillStyle = '#c99a2e'; circ(200, 152, 14); circ(200, 448, 10);
+  ctx.globalAlpha = 1;
+}
+function drawEnding() {
+  const t = E.t;
+  if (!E.shattered) {
+    drawGoldFrame(1);
+    const g = ctx.createLinearGradient(115, 165, 285, 435); g.addColorStop(0, '#eaf7ff'); g.addColorStop(0.5, '#b7dfff'); g.addColorStop(1, '#e4f4ff');
+    ctx.fillStyle = g; rr(117, 167, 166, 266, 14); ctx.fill();
+    // відображення его в дзеркалі
+    ctx.save(); rr(117, 167, 166, 266, 14); ctx.clip();
+    ch.x = 200; ch.y = 300 - R * 1.6; hideHang = false;
+    baseAlpha = 0.85; ch.expr = 'cool'; ch.exprT = 1; drawChar(ch); baseAlpha = 1;
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    E.cracks.slice(0, E.cr).forEach(pts => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); });
+    ctx.font = `800 13px ${UIFONT}`; ctx.fillStyle = '#5a3d36'; ctx.textAlign = 'center'; ctx.fillText('ЕГО', 200, 470);
+    return;
+  }
+  // уламки рамки та скла
+  drawGoldFrame(clamp(1 - (t - 1.3) / 0.5, 0, 1));
+  E.shards.forEach(s => {
+    ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.rot);
+    ctx.fillStyle = 'rgba(190,225,255,.9)'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); s.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  });
+  // справжній він: знімає окуляри
+  ch.x = 200; ch.y = 470 - R * 3.25;
+  ctx.fillStyle = '#c98466'; rr(120, 470, 160, 14, 7); ctx.fill();
+  if (t < 2.6) { hideHang = false; ch.expr = 'cool'; ch.exprT = 1; drawChar(ch); }
+  else if (t < 3.2) {
+    hideHang = true; ch.expr = 'smile'; ch.exprT = 1; drawChar(ch);
+    const k = (t - 2.6) / 0.6, e = k * k * (3 - 2 * k);
+    const gx = 200 + 0.08 * R * e, gy = ch.y + R * 0.03 + (R * 1.12) * e, gs = R * (1.15 - 0.53 * e);
+    ctx.save(); ctx.translate(gx, gy); ctx.rotate((Math.PI / 2 + 0.05) * e); drawGlasses(0, 0, gs, false); ctx.restore();
+  } else { hideHang = false; ch.expr = 'smile'; ch.exprT = 1; drawChar(ch); }
+  if (E.flash > 0) { ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = `rgba(255,255,255,${clamp(E.flash, 0, 1)})`; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+}
+function answerEnding(a) {
+  track('final_answer', { a });
+  E.answer = a;
+  bubble = null;
+  if (CONFIG.ending === 'both') showCoupon(); else showFinal(a);
+}
+$('eYes').addEventListener('click', () => answerEnding('yes'));
+$('eThink').addEventListener('click', () => answerEnding('think'));
+
+function showCoupon() {
+  state = 'coupon';
+  const d = new Date(Date.now() + CONFIG.coupon.days * 864e5);
+  $('cpPrize').textContent = CONFIG.coupon.prize;
+  $('cpText').textContent = 'Ти перемогла моє его 👑 Нагорода — справжня, не в грі 😉';
+  $('cpNum').textContent = '№ 0001';
+  $('cpDate').textContent = 'Дійсний до ' + d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
+  $('cpStamp').classList.add('hidden'); $('cpGo').classList.remove('hidden'); $('cpNext').classList.add('hidden');
+  confetti();
+  showOnly('coupon');
+}
+$('cpGo').addEventListener('click', () => {
+  track('coupon');
+  $('cpStamp').classList.remove('hidden'); $('cpGo').classList.add('hidden'); $('cpNext').classList.remove('hidden');
+  $('cpText').textContent = 'Я вже знаю 😉 Напиши, коли тобі зручно.';
+  SND.win(); buzz('win'); confetti();
+});
+$('cpNext').addEventListener('click', () => showFinal(E && E.answer));
+
+function showFinal(answer) {
   state = 'final';
-  track('game_complete', { stars: STARS.reduce((a, b) => a + (b || 0), 0) });
-  $('fTitle').textContent = CONFIG.finalTitle;
-  $('fMsg').textContent = CONFIG.finalMessage; $('fMsg').classList.toggle('hidden', !CONFIG.finalMessage);
+  $('fTitle').textContent = '🏆 Его повержене!';
+  const msg = answer === 'yes' ? 'Тоді пиши мені 😉' : answer === 'think' ? 'Думай. Я почекаю 😌' : CONFIG.finalMessage;
+  $('fMsg').textContent = msg || ''; $('fMsg').classList.toggle('hidden', !msg);
   const total = STARS.reduce((a, b) => a + (b || 0), 0);
-  $('fStats').textContent = `Зірок: ${total} з ${LEVELS.length * 3} · Влучань за весь час: ${totalHits}`;
+  const deaths = ATT[LEVELS.length - 1] || 0;
+  $('fStats').textContent = `Зірок: ${total} з ${LEVELS.length * 3} · Смертей на босі: ${deaths} · Влучань за весь час: ${totalHits}`;
   const tg = $('fTg');
   if (/^[A-Za-z0-9_]{4,32}$/.test(CONFIG.telegram)) { tg.href = 'https://t.me/' + CONFIG.telegram; tg.textContent = CONFIG.telegramButton; tg.classList.remove('hidden'); }
   confetti();
@@ -1090,9 +1330,10 @@ function taskText() {
       ? `${pre}🎈 Збий кульки від найменшої відповіді до найбільшої (${L.next}/${L.order.length})${L.P.timer ? ` · ⏱ ${Math.max(0, Math.ceil(L.orderT))} с` : ''}`
       : `${pre}🎯 Купол зник! Влуч у мене ${g} рази`;
     case 'clones': return `${pre}🧩 Правду каже лише справжній — вирахуй його й влуч (${h}/${g}). Копія = мінус життя`;
-    case 'carousel': return `${pre}🎠 Навколо мене крутяться дзеркала — прокидай у просвіт між ними (${h}/${g})`;
-    case 'teleport': return `${pre}✨ Я телепортуюсь. Кидай туди, де спалахне червоне коло — наперед! (${h}/${g})`;
-    case 'invisible': return `${pre}👻 Справжнє его невидиме. Дивись на відображення в озері й влуч у справжнього (${h}/${g})`;
+    case 'carousel': return `${pre}🎠 Дзеркала крутяться, а я ухиляюсь. Фінт: кинь один — другий туди, куди я відскочу (${h}/${g})`;
+    case 'teleport': return `${pre}✨ Телепорт: кидай у червоне коло наперед. Але я можу стрибнути раніше 😏 (${h}/${g})`;
+    case 'invisible': return `${pre}👻 Я невидимий і ухиляюсь. Шукай мене за відображенням в озері (${h}/${g})`;
+    case 'fury': return `${pre}🔥 ЛЮТЬ: телепорт + дзеркала + ухиляння. Останній ривок! (${h}/${g})`;
   }
   return '';
 }
@@ -1107,7 +1348,10 @@ function updateHud(force) {
     ? `👑 Ф${L.phase + 1}/${L.D.phases.length} · ⏱${Math.floor(Math.ceil(L.timeLeft) / 60)}:${String(Math.ceil(L.timeLeft) % 60).padStart(2, '0')}`
     : `Рів. ${lvIdx + 1} · 🎯 ${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
   $('hAmmo').textContent = `${useSecret ? CONFIG.secretWeapon.emoji : '🍅'}${L.ammo} ${'❤️'.repeat(Math.max(0, L.lives))}${'🤍'.repeat(3 - Math.max(0, L.lives))}`;
-  $('hSecret').classList.toggle('hidden', !secretUnlocked);
+  const pw = $('hPower');
+  pw.classList.toggle('hidden', !L.D.boss);
+  if (L.D.boss) { const ready = L.power >= POWER_MAX; pw.classList.toggle('ready', ready); pw.textContent = L.hail ? '🌧️…' : ready ? '🌧️ ГРАД' : `🌧️${L.power}/${POWER_MAX}`; }
+  $('hSecret').classList.toggle('hidden', !secretUnlocked || !!L.D.boss);
   $('hSecret').classList.toggle('on', useSecret);
 }
 let toastT;
@@ -1115,6 +1359,7 @@ function toast(text, ms) { const t = $('toast'); t.textContent = text; t.classLi
 
 /* ---------- input ---------- */
 cv.addEventListener('pointerdown', e => {
+  if (state === 'ending' && E && E.t < 3.9) { if (!E.shattered) shatter(); E.t = Math.max(E.t, 3.3); return; }
   if (state !== 'play' || !L || L.done) return;
   initAudio();
   const [x, y] = toWorld(e.clientX, e.clientY);
@@ -1301,6 +1546,7 @@ function drawPart(p) {
 }
 function render() {
   drawBackground();
+  if ((state === 'ending' || state === 'coupon' || state === 'final') && E) { drawEnding(); parts.forEach(drawPart); drawBubble(); return; }
   if (L) {
     drawPlatform();
     drawWind();
@@ -1332,8 +1578,10 @@ function update(dt) {
   if (L && L.clones) L.clones.forEach(c => decayChar(c, dt));
   for (let i = wallSplats.length - 1; i >= 0; i--) { wallSplats[i].age += dt; if (wallSplats[i].age > 5) wallSplats.splice(i, 1); }
   if (flash > 0) flash = Math.max(0, flash - dt);
+  if (state === 'ending' && E) updateEnding(dt);
   if (state === 'play' && L) {
     updateLevel(dt);
+    if (L) { bossAI(); hailStep(dt); }
     if (L.shieldPop > 0) L.shieldPop -= dt;
     if (cooldown > 0) cooldown -= dt;
     for (let i = projs.length - 1; i >= 0; i--) {
