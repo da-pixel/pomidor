@@ -197,7 +197,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-12-4';
+const BUILD = '2026-11-12-5';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -282,23 +282,23 @@ const LEVELS = [
     desc: 'Чим сильніше натягнеш — тим більше шкоди. Він ухиляється й кидає уламки — збивай їх 💀' },
   // ===== БЛОК 2 — міні-ігри без рогатки (ти — Помідорка проти Его). Відкривається після ★★★ на рівнях 1–6 =====
   { name: 'Вгору!', block2: true, noLaunch: true,
-    phases: [{ mode: 'jump2', goal: 1, jumpV: 760, g: 1350, steer: 9, goalH: 2800, dropEvery: 2.6, springPct: 0.08, breakPct: 0.14, movePct: 0.2 }],
+    phases: [{ mode: 'jump2', goal: 1, jumpV: 760, g: 1350, steer: 9, goalH: 3300, dropEvery: 1.95, springPct: 0.07, breakPct: 0.2, movePct: 0.3, finalSpeed: 80 }],
     desc: 'Веди пальцем — Помідорка стрибає вгору. Ухиляйся від уламків і приземлись Его на голову 👑' },
   { name: 'Цеглинки', block2: true, noLaunch: true,
-    phases: [{ mode: 'breakout', goal: 3, speed: 330, accel: 1.04, maxSpeed: 560, padW: 78, mirrorPct: 0.14, regen: 6 }],
-    desc: 'Веди ракетку пальцем. М’яч-помідор розбиває дзеркала — влуч в Его 3 рази.' },
+    phases: [{ mode: 'breakout', goal: 4, speed: 400, accel: 1.045, maxSpeed: 620, padW: 62, mirrorPct: 0.17, regen: 4, dropEvery: 2.5 }],
+    desc: 'Веди ракетку пальцем. М’яч-помідор розбиває дзеркала — влуч в Его 4 рази.' },
   { name: 'Нашестя відображень', block2: true, noLaunch: true,
-    phases: [{ mode: 'shooter', goal: 4, speed: 24, attack: 2.0, fireEvery: 0.26, loseY: 500 }],
+    phases: [{ mode: 'shooter', goal: 4, speed: 25, attack: 2.2, fireEvery: 0.27, loseY: 500, zig: 50 }],
     desc: 'Тримай палець — стріляєш. Справжній Его спалахує червоним серед копій.' },
   { name: 'Помідорна змійка', block2: true, noLaunch: true,
-    phases: [{ mode: 'snake2', goal: 12, step: 0.17, minStep: 0.09, speedUp: 0.006, mirrors: 4, mirrorEvery: 2 }],
+    phases: [{ mode: 'snake2', goal: 12, step: 0.145, minStep: 0.076, speedUp: 0.0055, mirrors: 6, mirrorEvery: 2, heartLife: 6.5 }],
     desc: 'Свайпай, щоб повертати. Збери 12 ❤️ і не врізайся в дзеркала Его.' },
   { name: 'Пролети!', block2: true, noLaunch: true,
-    phases: [{ mode: 'flappy', goal: 12, g: 1450, flap: -430, speed: 145, spacing: 220, gap: 172, minGap: 138 }],
+    phases: [{ mode: 'flappy', goal: 12, g: 1480, flap: -435, speed: 158, spacing: 218, gap: 165, minGap: 134, moveFrom: 3, shardEvery: 4.2 }],
     desc: 'Тапай — Помідорка злітає. Пролети 12 дзеркальних воріт.' },
   { name: 'Пінг-понг з Его', block2: true, noLaunch: true,
-    phases: [{ mode: 'pong2', goal: 5, speed: 320, accel: 1.05, maxSpeed: 600, padW: 90, egoW: 80, egoSpeed: 205, egoErr: 34 }],
-    desc: 'Справжній пінг-понг. Тобі треба 5 очок, Его — 3.' },
+    phases: [{ mode: 'pong2', goal: 5, speed: 335, accel: 1.05, maxSpeed: 620, padW: 86, egoW: 82, egoSpeed: 220, egoErr: 30, curve: 170 }],
+    desc: 'Справжній пінг-понг. Его б’є з підкруткою. Тобі треба 5 очок, Его — 3.' },
 ];
 
 /* ============================================================ */
@@ -933,7 +933,7 @@ const B2 = {
       h.x += h.vx * dt; if (h.x < -16) h.x = WW + 16; if (h.x > WW + 16) h.x = -16;
       const prev = h.y + 14; h.vy += P.g * dt; h.y += h.vy * dt;
       for (const p of L.plats) {
-        if (p.type === 'move' && !p.broken) { p.x += p.vx * dt; if (p.x < 40 || p.x > 360) p.vx *= -1; }
+        if ((p.type === 'move' || p.type === 'final') && !p.broken) { p.x += p.vx * dt; if (p.x < 60 || p.x > 340) p.vx *= -1; }
         if (p.broken) { p.vy += 900 * dt; p.y += p.vy * dt; }
       }
       if (h.vy > 0) {
@@ -954,16 +954,16 @@ const B2 = {
       for (let i = 0; i < L.plats.length; i++) {
         if (L.plats[i].y > 720 && L.plats[i].type !== 'final') {
           const top = Math.min(...L.plats.map(p => p.y));
-          if (!L.final && L.h > P.goalH) { L.final = { x: 200, y: top - 110, w: 120, type: 'final', vx: 0, broken: false, vy: 0 }; L.plats[i] = L.final; say('Ну спробуй, дострибни 😏', 2); }
+          if (!L.final && L.h > P.goalH) { L.final = { x: 200, y: top - 110, w: 110, type: 'final', vx: P.finalSpeed || 0, broken: false, vy: 0 }; L.plats[i] = L.final; say('Ну спробуй, дострибни 😏', 2); }
           else if (!L.final) L.plats[i] = this.plat(top - rnd(62, 88), P);
           else L.plats.splice(i--, 1);
         }
       }
       // уламки від Его зверху
       L.dropT -= dt;
-      if (L.dropT <= 0 && !L.done) { L.drops.push({ x: rnd(30, 370), y: -30, vy: rnd(170, 250), ph: rnd(0, TAU), rot: 0 }); L.dropT = P.dropEvery * rnd(0.7, 1.2); }
+      if (L.dropT <= 0 && !L.done) { const x = rnd(30, 370); L.drops.push({ x, y: -30, vy: rnd(180, 270), vx: (200 - x) * rnd(0.2, 0.6), ph: rnd(0, TAU), rot: 0 }); L.dropT = P.dropEvery * rnd(0.7, 1.2); }
       for (let i = L.drops.length - 1; i >= 0; i--) {
-        const s = L.drops[i]; s.y += s.vy * dt; s.x += Math.sin(t * 3 + s.ph) * 40 * dt; s.rot += dt * 5;
+        const s = L.drops[i]; s.y += s.vy * dt; s.x += ((s.vx || 0) + Math.sin(t * 3 + s.ph) * 40) * dt; s.rot += dt * 5;
         if (Math.hypot(s.x - h.x, s.y - h.y) < 20) { L.drops.splice(i, 1); loseLife('Влучив! 😎'); continue; }
         if (s.y > 740) L.drops.splice(i, 1);
       }
@@ -1015,13 +1015,21 @@ const B2 = {
         const m = Math.random() < P.mirrorPct && r > 0, hp = m ? 99 : (r < 2 ? 2 : 1);
         L.bricks.push({ x: x0 + c * (bw + gap), y: 170 + r * 26, w: bw, h: 21, hp, max: hp, mirror: m, alive: true });
       }
-      L.ego = { x: 200, y: 105 }; ch.x = 200; ch.y = 125;
+      L.ego = { x: 200, y: 105 }; ch.x = 200; ch.y = 125; L.drops = []; L.dropT = P.dropEvery; L.shrinkT = 0;
     },
     update(dt, t, P) {
       const b = L.ball, pad = L.pad;
       if (L.touchX !== null) pad.x += clamp(L.touchX - pad.x, -900 * dt, 900 * dt);
+      L.shrinkT = Math.max(0, L.shrinkT - dt); pad.w = P.padW * (L.shrinkT > 0 ? 0.6 : 1);
       pad.x = clamp(pad.x, pad.w / 2 + 6, WW - pad.w / 2 - 6);
-      L.ego.x = 200 + Math.sin(t * 0.9) * 130 + Math.sin(t * 2.1) * 20; ch.x = L.ego.x;
+      L.ego.x = 200 + Math.sin(t * 1.1) * 130 + Math.sin(t * 2.6) * 25; ch.x = L.ego.x;
+      L.dropT -= dt;
+      if (L.dropT <= 0 && !L.done) { L.drops.push({ x: L.ego.x, y: L.ego.y + 30, vy: rnd(190, 260), rot: 0 }); L.dropT = P.dropEvery * rnd(0.7, 1.2); }
+      for (let i = L.drops.length - 1; i >= 0; i--) {
+        const s = L.drops[i]; s.y += s.vy * dt; s.rot += dt * 6;
+        if (Math.abs(s.x - pad.x) < pad.w / 2 + 6 && Math.abs(s.y - pad.y) < 12) { L.drops.splice(i, 1); L.shrinkT = 3; SND.err(); say('Ракетка зменшилась 😏', 1.2); continue; }
+        if (s.y > 700) L.drops.splice(i, 1);
+      }
       if (b.stuck) { b.x = pad.x; b.y = pad.y - 12; return; }
       const steps = 3;
       for (let k = 0; k < steps; k++) {
@@ -1040,7 +1048,7 @@ const B2 = {
           if (br.mirror) { SND.clink(); } else { br.hp--; if (br.hp <= 0) { br.alive = false; burst(br.x + br.w / 2, br.y + 10, ['#dff3ff', '#a9dcff', '#fff'], 10, true); nz(0.12, 3000, 800, 0.2); } else tn(500, 380, 0.06, 0.08, 'triangle'); }
           break;
         }
-        if (Math.hypot(b.x - L.ego.x, b.y - L.ego.y) < 30) {
+        if (Math.hypot(b.x - L.ego.x, b.y - L.ego.y) < 26) {
           b.vy = Math.abs(b.vy); b.y = L.ego.y + 32; setExpr('hit', 1); scorePoint(b.x, b.y); sayPick(CONFIG.phrases.hit, 1.3);
         }
       }
@@ -1057,6 +1065,7 @@ const B2 = {
         else { ctx.fillStyle = br.hp === 2 ? 'rgba(160,210,255,.95)' : 'rgba(200,230,255,.8)'; rr(br.x, br.y, br.w, br.h, 4); ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.5; ctx.stroke(); if (br.hp === 1 && br.max === 2) { ctx.beginPath(); ctx.moveTo(br.x + 18, br.y + 2); ctx.lineTo(br.x + 25, br.y + 12); ctx.lineTo(br.x + 20, br.y + 19); ctx.stroke(); } }
       }
       drawEgoHead(L.ego.x, L.ego.y, 0.95, curExpr(ch));
+      L.drops.forEach(s => drawShardAt(s.x, s.y, s.rot));
       const p = L.pad; ctx.fillStyle = '#b97a4a'; rr(p.x - p.w / 2, p.y, p.w, 14, 7); ctx.fill(); ctx.fillStyle = '#e0a56a'; rr(p.x - p.w / 2 + 4, p.y + 2, p.w - 8, 4, 2); ctx.fill();
       drawHero(L.ball.x, L.ball.y, 22, time * 4);
       if (L.ball.stuck) { ctx.font = `800 13px ${UIFONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText('тапни, щоб запустити', 200, 660); }
@@ -1101,14 +1110,14 @@ const B2 = {
         L.ix += L.idir * spd * dt;
         const xs = alive.map(v => this.pos(v)[0]);
         if ((L.idir > 0 && Math.max(...xs) > 375) || (L.idir < 0 && Math.min(...xs) < 25)) { L.idir *= -1; L.iy += 14; }
-        L.flashT -= dt; if (L.flashT <= 0) { L.flashOn = 0.6; L.flashT = rnd(1.2, 1.9); }
+        L.flashT -= dt; if (L.flashT <= 0) { L.flashOn = 0.55; L.flashT = rnd(1.3, 2.0); }
         L.dropT -= dt;
-        if (L.dropT <= 0) { const v = pick(alive), [x, y] = this.pos(v); L.drops.push({ x, y: y + 14, vy: rnd(200, 280), rot: 0 }); L.dropT = P.attack * rnd(0.7, 1.2); }
+        if (L.dropT <= 0) { const v = pick(alive), [x, y] = this.pos(v); L.drops.push({ x, y: y + 14, vy: rnd(210, 300), rot: 0, zx: x, ph: rnd(0, TAU), amp: rnd(0, P.zig || 0) }); L.dropT = P.attack * rnd(0.7, 1.2); }
         if (Math.max(...alive.map(v => this.pos(v)[1])) >= P.loseY) { L.done = true; L.win = false; L.reason = 'invade'; endTimer = 0.8; SND.err(); }
       }
       if (L.flashOn > 0) L.flashOn -= dt;
       for (let i = L.drops.length - 1; i >= 0; i--) {
-        const s = L.drops[i]; s.y += s.vy * dt; s.rot += dt * 6;
+        const s = L.drops[i]; s.y += s.vy * dt; s.rot += dt * 6; if (s.amp) s.x = s.zx + Math.sin(s.y * 0.025 + s.ph) * s.amp;
         if (Math.abs(s.x - L.cannon.x) < 22 && Math.abs(s.y - L.cannon.y) < 16) { L.drops.splice(i, 1); loseLife('Попав 😎'); continue; }
         if (s.y > 700) L.drops.splice(i, 1);
       }
@@ -1139,19 +1148,23 @@ const B2 = {
       L.mirrors = []; this.reset(); L.stepT = P.step;
       for (let k = 0; k < P.mirrors; k++) this.addMirror();
       this.placeHeart(); ch.x = 200; ch.y = 70;
+      L.patrol = { c: 0, r: 2, dc: 1, steps: 0 };
     },
     reset() { L.snake = [{ c: 4, r: 7 }, { c: 3, r: 7 }, { c: 2, r: 7 }]; L.dir = { x: 1, y: 0 }; L.ndir = { x: 1, y: 0 }; },
     free(c, r) { return !L.snake.some(s => s.c === c && s.r === r) && !L.mirrors.some(m => m.c === c && m.r === r) && !(L.heart && L.heart.c === c && L.heart.r === r); },
     cell() { for (let k = 0; k < 300; k++) { const c = Math.floor(Math.random() * this.C), r = Math.floor(Math.random() * this.RW); const hd = L.snake[0]; if (this.free(c, r) && Math.abs(c - hd.c) + Math.abs(r - hd.r) > 3) return { c, r }; } return { c: 0, r: 0 }; },
     addMirror() { L.mirrors.push(this.cell()); },
-    placeHeart() { L.heart = null; L.heart = this.cell(); },
+    placeHeart() { L.heart = null; L.heart = this.cell(); L.heartT = (L.P && L.P.heartLife) || 99; },
     update(dt, t, P) {
       L.inv = Math.max(0, (L.inv || 0) - dt);
       if (L.done) return;
+      L.heartT -= dt; if (L.heartT <= 0) { this.placeHeart(); say('Серце втекло 😏', 1); }
       L.stepT -= dt; if (L.stepT > 0) return;
+      // дзеркало-патруль їздить рядком і повертає на краях
+      if (++L.patrol.steps % 3 === 0) { L.patrol.c += L.patrol.dc; if (L.patrol.c <= 0 || L.patrol.c >= this.C - 1) { L.patrol.dc *= -1; L.patrol.r = (L.patrol.r + 4) % this.RW; } }
       L.stepT = Math.max(P.minStep, P.step - L.phits * P.speedUp);
       L.dir = L.ndir; const hd = L.snake[0], n = { c: hd.c + L.dir.x, r: hd.r + L.dir.y };
-      const bad = n.c < 0 || n.r < 0 || n.c >= this.C || n.r >= this.RW || L.snake.slice(0, -1).some(s => s.c === n.c && s.r === n.r) || L.mirrors.some(m => m.c === n.c && m.r === n.r);
+      const bad = n.c < 0 || n.r < 0 || n.c >= this.C || n.r >= this.RW || L.snake.slice(0, -1).some(s => s.c === n.c && s.r === n.r) || L.mirrors.some(m => m.c === n.c && m.r === n.r) || (n.c === L.patrol.c && n.r === L.patrol.r);
       if (bad) { L.inv = 0; loseLife('Врізалась 😏'); this.reset(); return; }
       L.snake.unshift(n);
       if (n.c === L.heart.c && n.r === L.heart.r) {
@@ -1166,8 +1179,10 @@ const B2 = {
       ctx.fillStyle = 'rgba(255,255,255,.55)'; rr(X0 - 4, Y0 - 4, C * CS + 8, RW * CS + 8, 12); ctx.fill();
       for (let c = 0; c < C; c++) for (let r = 0; r < RW; r++) if ((c + r) % 2) { ctx.fillStyle = 'rgba(120,180,110,.12)'; ctx.fillRect(X0 + c * CS, Y0 + r * CS, CS, CS); }
       L.mirrors.forEach(m => drawMirrorRect(X0 + m.c * CS + 2, Y0 + m.r * CS + 2, CS - 4, CS - 4));
+      drawMirrorRect(X0 + L.patrol.c * CS + 1, Y0 + L.patrol.r * CS + 1, CS - 2, CS - 2); ctx.strokeStyle = '#e8322c'; ctx.lineWidth = 2; rr(X0 + L.patrol.c * CS + 1, Y0 + L.patrol.r * CS + 1, CS - 2, CS - 2, 4); ctx.stroke();
+      if (L.heartT < 2.5) { ctx.globalAlpha = 0.5 + 0.5 * Math.sin(time * 14); }
       ctx.font = `22px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('❤️', X0 + L.heart.c * CS + 15, Y0 + L.heart.r * CS + 16 + Math.sin(time * 5) * 1.5);
+      ctx.fillText('❤️', X0 + L.heart.c * CS + 15, Y0 + L.heart.r * CS + 16 + Math.sin(time * 5) * 1.5); ctx.globalAlpha = 1;
       for (let i = L.snake.length - 1; i >= 0; i--) { const s = L.snake[i]; if (i === 0) drawHero(X0 + s.c * CS + 15, Y0 + s.r * CS + 15, 28); else { ctx.font = `${22 - Math.min(i, 6)}px ${EMOJI}`; ctx.fillText('🍅', X0 + s.c * CS + 15, Y0 + s.r * CS + 16); } }
       drawEgoHead(40, 72, 0.55, curExpr(ch));
     },
@@ -1187,11 +1202,11 @@ const B2 = {
   flappy: {
     setup(P) {
       L.noChar = true; L.inv = 0; L.started = false; L.pipes = []; L.dist = 0;
-      L.bird = { x: 110, y: 330, vy: 0 }; ch.x = 300; ch.y = 70;
+      L.bird = { x: 110, y: 330, vy: 0 }; ch.x = 300; ch.y = 70; L.fshards = []; L.fsT = P.shardEvery || 99;
     },
     spawn(P) {
       const k = L.phits, gap = Math.max(P.minGap, P.gap - k * 2.5);
-      L.pipes.push({ x: WW + 40, gy: rnd(210, 520), gap, passed: false, amp: k >= 5 ? rnd(25, 55) : 0, ph: rnd(0, TAU), w: 56 });
+      L.pipes.push({ x: WW + 40, gy: rnd(210, 520), gap, passed: false, amp: k >= (P.moveFrom || 5) ? rnd(30, 65) : 0, ph: rnd(0, TAU), w: 56 });
     },
     update(dt, t, P) {
       const b = L.bird; L.inv = Math.max(0, (L.inv || 0) - dt);
@@ -1205,7 +1220,10 @@ const B2 = {
         if (!p.passed && p.x + p.w < b.x) { p.passed = true; scorePoint(b.x, b.y); }
         if (p.x < -80) L.pipes.splice(i, 1);
       }
+      L.fsT -= dt;
+      if (L.fsT <= 0 && L.phits >= 2) { L.fshards.push({ x: WW + 30, y: rnd(150, 560), vx: -rnd(230, 300), rot: 0 }); L.fsT = P.shardEvery * rnd(0.7, 1.2); }
       let hit = b.y > GROUND - 14 || b.y < -30;
+      for (let i = L.fshards.length - 1; i >= 0; i--) { const f = L.fshards[i]; f.x += f.vx * dt; f.rot += dt * 7; if (Math.hypot(f.x - b.x, f.y - b.y) < 20) { hit = true; L.fshards.splice(i, 1); continue; } if (f.x < -40) L.fshards.splice(i, 1); }
       for (const p of L.pipes) {
         const top = p.cy - p.gap / 2, bot = p.cy + p.gap / 2;
         if (circRect(b.x, b.y, 13, p.x, -100, p.w, top + 100) || circRect(b.x, b.y, 13, p.x, bot, p.w, 900)) hit = true;
@@ -1226,6 +1244,7 @@ const B2 = {
       ctx.fillStyle = '#8fd17f'; ctx.fillRect(-60, GROUND, WW + 120, 80);
       ctx.fillStyle = '#7ccf6b'; for (let x = -((time * 150) % 30); x < WW + 30; x += 30) ctx.fillRect(x, GROUND, 15, 8);
       drawEgoHead(ch.x, 72, 0.55, curExpr(ch));
+      (L.fshards || []).forEach(f => drawShardAt(f.x, f.y, f.rot));
       drawHero(L.bird.x, L.bird.y, 32, clamp(L.bird.vy / 900, -0.5, 0.9), L.inv > 0);
       if (!L.started) { ctx.font = `800 15px ${UIFONT}`; ctx.fillStyle = '#5a3d36'; ctx.textAlign = 'center'; ctx.fillText('тапни, щоб полетіти', 200, 420); }
     },
@@ -1262,7 +1281,8 @@ const B2 = {
           b.vy = dirUp ? -vy : vy; tn(dirUp ? 330 : 260, dirUp ? 480 : 380, 0.06, 0.09, 'triangle');
         };
         if (b.vy > 0 && b.y + 9 >= pp.y && b.y < pp.y + 12 && Math.abs(b.x - pp.x) < pp.w / 2 + 9) hitPad(pp, true);
-        if (b.vy < 0 && b.y - 9 <= ep.y + 12 && b.y > ep.y - 4 && Math.abs(b.x - ep.x) < ep.w / 2 + 9) { hitPad(ep, false); setExpr('cool', 0.5); }
+        if (b.vy < 0 && b.y - 9 <= ep.y + 12 && b.y > ep.y - 4 && Math.abs(b.x - ep.x) < ep.w / 2 + 9) { hitPad(ep, false); setExpr('cool', 0.5); b.curve = rnd(-1, 1) * (P.curve || 0); }
+        if (b.vy > 0 && b.curve) b.vx += b.curve * d; if (b.vy < 0) b.curve = 0;
       }
       if (b.y < 40) { scorePoint(b.x, 60); setExpr('shock', 1); sayPick(['Як?!', 'Це випадковість 😤', 'Ну все, тепер серйозно'], 1.3); this.serve(P, 1); }
       if (b.y > 690) { L.inv = 0; loseLife(pick(['Моє очко 😎', 'Его веде', 'Хе'])); this.serve(P, -1); }
@@ -1783,8 +1803,8 @@ function showOnly(id) {
 }
 // Локальний тест (localhost): усі рівні відкриті
 const DEV = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
-// Блок 2 відкривається, коли рівні 1–6 пройдені на ★★★
-function block2Open() { for (let k = 0; k < 6; k++) if ((STARS[k] || 0) < 3) return false; return true; }
+// Блок 2 відкривається, коли рівні 1–6 пройдені (будь-яка кількість зірок)
+function block2Open() { for (let k = 0; k < 6; k++) if ((STARS[k] || 0) < 1) return false; return true; }
 const B2_FIRST = LEVELS.findIndex(D => D.block2);
 function isOpen(i) {
   if (DEV) return true;
@@ -1796,7 +1816,7 @@ function buildMenu() {
   $('hi').textContent = CONFIG.greeting;
   const box1 = $('levels'), box2 = $('levels2'); box1.innerHTML = ''; box2.innerHTML = '';
   const b2open = block2Open(), b2stars = LEVELS.reduce((a, D, k) => a + (D.block2 ? (STARS[k] || 0) : 0), 0);
-  $('b2head').textContent = (DEV ? '🛠 DEV: усе відкрито · ' : '') + (b2open ? `🔥 Блок 2 · ★ ${b2stars}/18` : '🔒 Блок 2 — пройди рівні 1–6 на ★★★');
+  $('b2head').textContent = (DEV ? '🛠 DEV: усе відкрито · ' : '') + (b2open ? `🔥 Блок 2 · ★ ${b2stars}/18` : '🔒 Блок 2 — пройди рівні 1–6');
   LEVELS.forEach((D, i) => {
     const box = D.block2 ? box2 : box1;
     const b = document.createElement('button');
@@ -1807,7 +1827,7 @@ function buildMenu() {
     const st = document.createElement('small');
     st.textContent = open ? ('★'.repeat(STARS[i] || 0) + '☆'.repeat(3 - (STARS[i] || 0))) : '';
     b.append(n, st);
-    b.addEventListener('click', () => { initAudio(); if (!open) toast(D.block2 && !b2open ? 'Пройди рівні 1–6 на ★★★' : 'Спершу пройди попередній рівень'); else showIntro(i); });
+    b.addEventListener('click', () => { initAudio(); if (!open) toast(D.block2 && !b2open ? 'Спершу пройди рівні 1–6' : 'Спершу пройди попередній рівень'); else showIntro(i); });
     box.appendChild(b);
   });
   const total = STARS.reduce((a, b) => a + (b || 0), 0);
