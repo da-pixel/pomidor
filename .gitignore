@@ -3,3 +3,5 @@ photos/
 _cover/
 cover.png
 _bot/
+_dev/
+.claude/
