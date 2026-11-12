@@ -88,7 +88,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 .btn.ghost{background:#fff;color:var(--ink);box-shadow:0 4px 0 #e6cfc6;border:2px solid #f0ddd5}
 .row{display:flex;gap:10px}.row .btn{flex:1}
 .small{font-size:13px!important;color:#8a6a60!important;margin:10px 0 0!important}
-#levels{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 4px}
+.b2-h{font-weight:900;font-size:15px;margin:16px 0 0;color:#5a3d36}
+#levels,#levels2{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 4px}
 .lv{aspect-ratio:1;border:none;border-radius:16px;background:#fff;box-shadow:0 3px 0 #e6cfc6;border:2px solid #f0ddd5;font-family:inherit;font-weight:900;font-size:22px;color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;cursor:pointer}
 .lv small{font-size:11px;letter-spacing:1px;font-weight:700;margin-top:2px}
 .lv.locked{opacity:.4}
@@ -130,6 +131,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
   <h1>Помідорний тир:<br>сеанс терапії</h1>
   <p>Кидай у мене помідори. Звучить просто — але рівні не для всіх 😏</p>
   <div id="levels"></div>
+  <div class="b2-h" id="b2head"></div>
+  <div id="levels2"></div>
   <p class="small" id="menuNote"></p>
   <button class="btn ghost hidden" id="adminBtn">👁 Гравці</button>
 </div></div>
@@ -194,7 +197,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-12-2';
+const BUILD = '2026-11-12-3';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -277,6 +280,25 @@ const LEVELS = [
   { name: 'Бос: Его', ammo: 70, preview: 0, boss: true, timeLimit: 185, hp: true, hail: true,
     phases: [{ mode: 'fury', goal: 220 }],
     desc: 'Чим сильніше натягнеш — тим більше шкоди. Він ухиляється й кидає уламки — збивай їх 💀' },
+  // ===== БЛОК 2 — відкривається, коли рівні 1–6 пройдені на ★★★. Складність ~+30% до блоку 1 =====
+  { name: 'Вгору!', block2: true, ammo: 10, preview: 0.2,
+    phases: [{ mode: 'jumper', goal: 5, jump: 700, g: 1150, hspd: 220, camY: 230, climbMax: 2400, breakPct: 0.25, movePct: 0.3 }],
+    desc: 'Я стрибаю вгору по платформах. Влуч 5 разів, поки я не застрибнув у хмари ☁️' },
+  { name: 'Фортеця з ящиків', block2: true, ammo: 20, preview: 0.22,
+    phases: [{ mode: 'fort', goal: 3, stonePct: 0.25 }],
+    desc: 'Я в фортеці з ящиків. Розбий її — верхні ящики падають униз. Повний натяг ламає дерево за раз.' },
+  { name: 'Цеглинки', block2: true, ammo: 18, preview: 0.2,
+    phases: [{ mode: 'bricks', goal: 4, regen: 10, speeds: [75, -95] }],
+    desc: 'Між нами рухома стіна з цеглинок. Пробий щілину — і влуч у мене.' },
+  { name: 'Нашестя відображень', block2: true, ammo: 24, preview: 0.2,
+    phases: [{ mode: 'invaders', goal: 3, speed: 28, attack: 3.4, loseY: 470 }],
+    desc: 'Справжній я — серед відображень і спалахую червоним. Не дай їм спуститися!' },
+  { name: 'Дзеркальна змійка', block2: true, ammo: 10, preview: 0.2,
+    phases: [{ mode: 'snake', goal: 4, len: 16, speed: 135 }],
+    desc: 'За мною тягнеться хвіст із дзеркал — він відбиває помідори назад у тебе.' },
+  { name: 'Дзеркальний пінг-понг', block2: true, ammo: 14, preview: 0.2,
+    phases: [{ mode: 'pong', goal: 4, padSpeed: 210, padW: 92 }],
+    desc: 'Я відбиваю ракеткою. Бий із відскоком від стін — вони пружинять, і ракетка не встигне.' },
 ];
 
 /* ============================================================ */
@@ -722,7 +744,7 @@ function startLevel(i) {
 function setupPhase() {
   const P = L.D.phases[L.phase];
   L.P = P; L.mode = P.mode; L.pgoal = P.goal; L.phits = 0;
-  L.segs = []; L.plat = null; L.wind = 0; L.windTarget = 0; L.windT = 0; L.windOn = false;
+  L.noChar = false; L.segs = []; L.plat = null; L.wind = 0; L.windTarget = 0; L.windT = 0; L.windOn = false;
   L.mirror = null; L.balloons = []; L.shield = false; L.clones = null; L.t = 0; L.orderT = 0;
   projs.length = 0;
   ch.splats = ch.splats || []; ch.exprT = 0;
@@ -760,6 +782,7 @@ function setupPhase() {
       break;
     }
     case 'invisible': feet = 330; ch.x = 200; L.plat = { x: 200, w: 380 }; L.reveal = 0.8; break;
+    default: if (B2[P.mode]) { const f = B2[P.mode].setup(P); if (f !== undefined) feet = f; } break;
   }
   L.dg = { off: 0, target: 0, t: 0, cd: 0.8 };
   if (P.mode === 'fury' && L.D.boss) applyStage(0, false);
@@ -834,6 +857,324 @@ function updateWind(dt) {
   if (L.windT <= 0) { const m = L.P.windMax; L.windTarget = Math.round(rnd(-m, m) / 20) * 20; L.windT = rnd(3, 4.5); }
   L.wind += (L.windTarget - L.wind) * Math.min(1, dt * 2.5);
 }
+/* ============================================================
+   БЛОК 2 — рівні в дусі класичних жанрів (власна механіка й графіка)
+   Кожен режим: setup(P) → feet, update(dt,t,P), collide(p), drawBack/drawFront, task(g,h)
+   ============================================================ */
+function circRect(px, py, r, x, y, w, h) { const cx = clamp(px, x, x + w), cy = clamp(py, y, y + h); return (px - cx) ** 2 + (py - cy) ** 2 < r * r; }
+function customHit(x, y, p) {
+  if (L.busy || L.done) return;
+  L.phits++; L.totalHits++; totalHits++; save('pt_total', totalHits);
+  burst(x, y, TOMATO_COLS, 16); SND.splat(); SND.good(Math.min(L.phits, 4)); buzz('hit');
+  sayPick(CONFIG.phrases.hit, 1.3);
+  updateHud(); checkEnd();
+}
+function circleBounce(p, cx, cy, r, damp) {
+  const dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
+  if (d >= r + PR || (p.vx * dx + p.vy * dy) >= 0) return false;
+  const nx = dx / d, ny = dy / d, dot = p.vx * nx + p.vy * ny;
+  p.vx = (p.vx - 2 * dot * nx) * damp; p.vy = (p.vy - 2 * dot * ny) * damp;
+  p.x = cx + nx * (r + PR + 1); p.y = cy + ny * (r + PR + 1);
+  return true;
+}
+const WOOD = ['#c98a4b', '#e0a56a', '#8c5a33'];
+
+const B2 = {
+  /* ---------- «Вгору!»: стрибає по платформах угору, камера їде за ним ---------- */
+  jumper: {
+    plat(y, P) {
+      const r = Math.random(), type = r < P.breakPct ? 'break' : r < P.breakPct + P.movePct ? 'move' : 'normal';
+      return { x: rnd(50, 350), y, w: type === 'break' ? 62 : 72, type, vx: type === 'move' ? (Math.random() < 0.5 ? -1 : 1) * rnd(50, 90) : 0, broken: false, vy: 0 };
+    },
+    setup(P) {
+      L.plats = [{ x: 200, y: 580, w: 90, type: 'normal', vx: 0, broken: false, vy: 0 }];
+      for (let y = 580 - rnd(80, 110); y > -160; y -= rnd(80, 112)) L.plats.push(this.plat(y, P));
+      ch.x = 200; L.jvy = -P.jump; L.jvx = 0; L.climb = 0; L.jTarget = null;
+      return 580;
+    },
+    update(dt, t, P) {
+      const fy = R * 3.25;
+      for (const p of L.plats) {
+        if (p.type === 'move' && !p.broken) { p.x += p.vx * dt; if (p.x < 45 || p.x > 355) { p.vx *= -1; p.x = clamp(p.x, 45, 355); } }
+        if (p.broken) { p.vy += 900 * dt; p.y += p.vy * dt; }
+      }
+      const prevFeet = ch.y + fy;
+      L.jvy += P.g * dt; ch.y += L.jvy * dt;
+      // куди стрибати: випадкова досяжна платформа вище
+      const feet = ch.y + fy;
+      if (!L.jTarget || L.jTarget.broken || L.jTarget.y > feet - 5) {
+        const c = L.plats.filter(p => !p.broken && p.y < feet - 30 && p.y > feet - 210);
+        L.jTarget = c.length ? pick(c) : null;
+      }
+      const want = L.jTarget ? clamp((L.jTarget.x - ch.x) * 2.4, -P.hspd, P.hspd) : 0;
+      L.jvx += (want - L.jvx) * Math.min(1, dt * 4);
+      ch.x = clamp(ch.x + L.jvx * dt, 35, 365);
+      if (L.jvy > 0) {
+        for (const p of L.plats) {
+          if (p.broken) continue;
+          if (prevFeet <= p.y + 2 && feet >= p.y && Math.abs(ch.x - p.x) < p.w / 2 + 12) {
+            ch.y = p.y - fy; L.jvy = -P.jump; tn(330, 660, 0.1, 0.06, 'sine');
+            if (p.type === 'break') { p.broken = true; p.vy = 0; nz(0.12, 2000, 500, 0.15); }
+            break;
+          }
+        }
+      }
+      if (ch.y + fy > 650) { ch.y = 650 - fy; L.jvy = -P.jump * 1.1; }
+      // камера: тримаємо його не вище camY — світ їде вниз
+      if (ch.y < P.camY) {
+        const d = P.camY - ch.y; ch.y = P.camY; L.climb += d;
+        L.plats.forEach(p => p.y += d);
+        wallSplats.forEach(s => s.y += d);
+      }
+      for (let i = 0; i < L.plats.length; i++) {
+        if (L.plats[i].y > 600) { const top = Math.min(...L.plats.map(p => p.y)); L.plats[i] = this.plat(top - rnd(80, 112), P); }
+      }
+      if (!L.done && L.climb >= P.climbMax) { L.done = true; L.win = false; L.reason = 'escape'; endTimer = 0.8; SND.err(); say('Па-па! ☁️', 1.5); }
+    },
+    drawBack() {
+      const g = ctx.createLinearGradient(0, 0, 0, 120); g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(-60, -40, WW + 120, 160);
+      ctx.font = `26px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      [[60, 30], [200, 14], [330, 34]].forEach(([x, y]) => ctx.fillText('☁️', x + Math.sin(time + x) * 6, y));
+      for (const p of L.plats) {
+        ctx.globalAlpha = p.broken ? 0.5 : 1;
+        ctx.fillStyle = p.type === 'move' ? '#5fb4ea' : p.type === 'break' ? '#c9a27a' : '#7ccf6b';
+        rr(p.x - p.w / 2, p.y, p.w, 11, 5.5); ctx.fill();
+        if (p.type === 'break') { ctx.strokeStyle = '#8c5a33'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(p.x - 6, p.y); ctx.lineTo(p.x + 2, p.y + 11); ctx.stroke(); }
+        ctx.fillStyle = 'rgba(255,255,255,.45)'; rr(p.x - p.w / 2 + 4, p.y + 2, p.w - 8, 3, 1.5); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    },
+    drawFront() {
+      const P = L.P, k = clamp(L.climb / P.climbMax, 0, 1), x = 386, y0 = 520, y1 = 150;
+      ctx.fillStyle = 'rgba(255,255,255,.75)'; rr(x - 5, y1, 10, y0 - y1, 5); ctx.fill();
+      ctx.fillStyle = k > 0.75 ? '#e8322c' : '#5fb4ea'; rr(x - 5, y0 - (y0 - y1) * k, 10, (y0 - y1) * k, 5); ctx.fill();
+      ctx.font = `18px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('☁️', x, y1 - 14);
+    },
+    task(g, h) { return `⬆️ Влуч ${g} разів, поки я не застрибнув у хмари (${h}/${g})`; },
+  },
+
+  /* ---------- «Фортеця з ящиків»: ящики ламаються, верхні падають униз ---------- */
+  fort: {
+    C0: 226, CS: 32, BASE: 580,
+    isChar(c, r) { return (c === 2 || c === 3) && r <= 3; },
+    setup(P) {
+      const b = [];
+      for (let c = 0; c < 5; c++) for (let r = 0; r < 5; r++) {
+        if (this.isChar(c, r)) continue;
+        const stone = Math.random() < P.stonePct;
+        b.push({ c, r, stone, hp: stone ? 2 : 1, max: stone ? 2 : 1, y: this.BASE - this.CS * (r + 1) });
+      }
+      L.blocks = b; ch.x = this.C0 + this.CS * 3;
+      L.plat = { x: this.C0 + this.CS * 2.5, w: this.CS * 5 + 14 };
+      return this.BASE;
+    },
+    update(dt) {
+      // гравітація по стовпцях: ящики падають на найнижче вільне місце (над ним — на нього)
+      for (let c = 0; c < 5; c++) {
+        const col = L.blocks.filter(b => b.c === c).sort((a, b) => a.r - b.r);
+        let next = (c === 2 || c === 3) ? 4 : 0;
+        for (const b of col) {
+          b.r = next++;
+          const ty = this.BASE - this.CS * (b.r + 1);
+          if (b.y < ty) { b.vy = (b.vy || 0) + 1400 * dt; b.y = Math.min(ty, b.y + b.vy * dt); if (b.y === ty) { b.vy = 0; tn(110, 70, 0.06, 0.08, 'square'); } }
+          else b.y = ty;
+        }
+      }
+    },
+    collide(p) {
+      for (let i = 0; i < L.blocks.length; i++) {
+        const b = L.blocks[i], x = this.C0 + this.CS * b.c;
+        if (!circRect(p.x, p.y, PR * 0.8, x, b.y, this.CS, this.CS)) continue;
+        b.hp -= (p.power || 0) >= 0.85 ? 2 : 1;
+        burst(p.x, p.y, b.stone ? ['#b8b8c4', '#8d8d99', '#fff'] : WOOD, 10);
+        if (b.hp <= 0) { L.blocks.splice(i, 1); nz(0.18, 2500, 400, 0.3); burst(x + 16, b.y + 16, b.stone ? ['#b8b8c4', '#8d8d99'] : WOOD, 14); }
+        else tn(160, 90, 0.08, 0.18, 'square');
+        return 'gone';
+      }
+      return null;
+    },
+    drawFront() {
+      for (const b of L.blocks) {
+        const x = this.C0 + this.CS * b.c, y = b.y, s = this.CS;
+        ctx.fillStyle = b.stone ? '#9a9aa6' : '#c98a4b'; rr(x + 1, y + 1, s - 2, s - 2, 4); ctx.fill();
+        ctx.strokeStyle = b.stone ? '#6f6f7a' : '#8c5a33'; ctx.lineWidth = 2; rr(x + 1, y + 1, s - 2, s - 2, 4); ctx.stroke();
+        if (!b.stone) { ctx.beginPath(); ctx.moveTo(x + 3, y + 3); ctx.lineTo(x + s - 3, y + s - 3); ctx.moveTo(x + s - 3, y + 3); ctx.lineTo(x + 3, y + s - 3); ctx.lineWidth = 1.5; ctx.stroke(); }
+        if (b.hp < b.max) { ctx.strokeStyle = 'rgba(40,20,10,.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + 8, y + 4); ctx.lineTo(x + 14, y + 14); ctx.lineTo(x + 10, y + 22); ctx.stroke(); }
+      }
+    },
+    task(g, h) { return `🏰 Розбий фортецю й влуч у мене ${g} рази. Повний натяг ламає ящик (${h}/${g})`; },
+  },
+
+  /* ---------- «Цеглинки»: три ряди цеглин їдуть у різні боки, розбиті відростають ---------- */
+  bricks: {
+    setup(P) {
+      L.rows = P.speeds.map((v, i) => ({ y: 330 + i * 30, v, off: rnd(0, 50),
+        bricks: Array.from({ length: 10 }, (_, k) => { const stone = Math.random() < 0.12; const hp = stone ? 2 : 1; const gap = k % 5 === 2 || k % 5 === 4; return { hp, max: hp, dead: 0, gap }; }) }));
+      ch.x = 200; L.plat = { x: 200, w: 320 };
+      return 290;
+    },
+    bx(row, i) { return ((i * 50 + row.off) % 500 + 500) % 500 - 50; },
+    update(dt, t, P) {
+      ch.x = 200 + Math.sin(t * 0.8) * 120;
+      for (const row of L.rows) {
+        row.off += row.v * dt;
+        for (const b of row.bricks) if (b.dead > 0 && !b.gap) { b.dead -= dt; if (b.dead <= 0) b.hp = b.max; }
+      }
+    },
+    collide(p) {
+      for (const row of L.rows) for (let i = 0; i < row.bricks.length; i++) {
+        const b = row.bricks[i]; if (b.dead > 0 || b.gap) continue;
+        if (!circRect(p.x, p.y, PR * 0.8, this.bx(row, i), row.y, 48, 24)) continue;
+        b.hp -= (p.power || 0) >= 0.85 ? 2 : 1;
+        burst(p.x, p.y, ['#d0603f', '#f08a5d', '#fff'], 10);
+        if (b.hp <= 0) { b.dead = L.P.regen; nz(0.15, 3000, 600, 0.25); } else tn(200, 120, 0.07, 0.15, 'square');
+        return 'gone';
+      }
+      return null;
+    },
+    drawFront() {
+      for (const row of L.rows) for (let i = 0; i < row.bricks.length; i++) {
+        const b = row.bricks[i], x = this.bx(row, i);
+        if (b.gap) continue;
+        if (b.dead > 0) { if (b.dead < 1.2) { ctx.strokeStyle = 'rgba(208,96,63,.35)'; ctx.lineWidth = 1.5; rr(x, row.y, 48, 24, 4); ctx.stroke(); } continue; }
+        ctx.fillStyle = b.max === 3 ? '#8d8d99' : b.hp === 2 ? '#c4513a' : '#ef8a5c';
+        rr(x, row.y, 48, 24, 4); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.3)'; rr(x + 3, row.y + 3, 42, 5, 2.5); ctx.fill();
+        if (b.hp < b.max) { ctx.strokeStyle = 'rgba(40,20,10,.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + 20, row.y + 3); ctx.lineTo(x + 26, row.y + 13); ctx.lineTo(x + 22, row.y + 21); ctx.stroke(); }
+      }
+    },
+    task(g, h) { return `🧱 Пробий рухому стіну й влуч у мене ${g} рази (${h}/${g})`; },
+  },
+
+  /* ---------- «Нашестя відображень»: ряди міні-копій марширують і спускаються ---------- */
+  invaders: {
+    setup(P) {
+      L.noChar = true; L.inv = [];
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) L.inv.push({ c, r, alive: true });
+      L.invX = 0; L.invY = 0; L.invDir = 1; L.realI = Math.floor(Math.random() * 15); L.flashT = 1.2; L.flashOn = 0; L.iAtk = P.attack;
+      return 330;
+    },
+    pos(v) { return [80 + v.c * 60 + L.invX, 150 + v.r * 48 + L.invY]; },
+    update(dt, t, P) {
+      const alive = L.inv.filter(v => v.alive);
+      const spd = P.speed * (1 + (15 - alive.length) / 15 * 1.2);
+      if (!L.done && !L.busy) {
+        L.invX += L.invDir * spd * dt;
+        const xs = alive.map(v => this.pos(v)[0]);
+        if ((L.invDir > 0 && Math.max(...xs) > 372) || (L.invDir < 0 && Math.min(...xs) < 28)) { L.invDir *= -1; L.invY += 16; tn(160, 120, 0.08, 0.08, 'square'); }
+        L.flashT -= dt; if (L.flashT <= 0) { L.flashOn = 0.7; L.flashT = rnd(1.0, 1.6); }
+        L.iAtk -= dt;
+        if (L.iAtk <= 0) { const v = pick(alive), [x, y] = this.pos(v); L.enemy.push(makeShard(x, y + 14)); L.iAtk = P.attack * rnd(0.8, 1.2); nz(0.2, 2500, 6000, 0.1, 'bandpass'); }
+        const low = Math.max(...alive.map(v => this.pos(v)[1]));
+        if (low >= P.loseY) { L.done = true; L.win = false; L.reason = 'invade'; endTimer = 0.8; SND.err(); }
+      }
+      if (L.flashOn > 0) L.flashOn -= dt;
+      const [rx, ry] = this.pos(L.inv[L.realI]); ch.x = rx; ch.y = ry + 22; // для бульбашки з репліками
+    },
+    collide(p) {
+      for (let i = 0; i < L.inv.length; i++) {
+        const v = L.inv[i]; if (!v.alive) continue;
+        const [x, y] = this.pos(v);
+        if (Math.hypot(p.x - x, p.y - y) > 18 + PR * 0.6) continue;
+        if (i === L.realI) {
+          customHit(x, y, p);
+          const others = L.inv.map((w, k) => k).filter(k => k !== i && L.inv[k].alive);
+          if (others.length < 5) L.inv.forEach(w => w.alive = true);
+          const pool = L.inv.map((w, k) => k).filter(k => k !== i && L.inv[k].alive);
+          L.realI = pick(pool); L.flashOn = 0.8; L.flashT = rnd(1.0, 1.6); // новий справжній одразу показує себе
+        } else {
+          v.alive = false; burst(x, y, ['#cdbbff', '#fff', '#f4d3bf'], 12); tn(700, 300, 0.12, 0.1, 'triangle');
+          if (Math.random() < 0.3) say('Не той 😏', 1);
+        }
+        return 'gone';
+      }
+      return null;
+    },
+    drawFront() {
+      ctx.strokeStyle = 'rgba(232,50,44,.35)'; ctx.lineWidth = 2; ctx.setLineDash([8, 8]);
+      ctx.beginPath(); ctx.moveTo(10, L.P.loseY + 14); ctx.lineTo(WW - 10, L.P.loseY + 14); ctx.stroke(); ctx.setLineDash([]);
+      L.inv.forEach((v, i) => {
+        if (!v.alive) return;
+        const [x, y] = this.pos(v), real = i === L.realI && L.flashOn > 0;
+        ctx.save(); ctx.translate(x, y + Math.sin(time * 6 + i) * 1.5); ctx.scale(0.5, 0.5); drawHead(real ? 'laugh' : 'idle'); ctx.restore();
+        if (real) { ctx.strokeStyle = '#e8322c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 19, 0, TAU); ctx.stroke(); }
+      });
+    },
+    task(g, h) { return `👾 Справжній спалахує червоним — влуч у нього ${g} рази, поки копії не спустилися (${h}/${g})`; },
+  },
+
+  /* ---------- «Дзеркальна змійка»: за ним тягнеться хвіст із дзеркальних кульок ---------- */
+  snake: {
+    setup(P) {
+      ch.x = 200; L.trail = []; L.sLen = P.len; L.sSpd = P.speed; L.svx = 0; L.svy = 0; L.lastPh = 0;
+      L.wp = { x: rnd(70, 330), y: rnd(140, 330) }; L.orbs = [];
+      return 220 + R * 3.25;
+    },
+    update(dt, t, P) {
+      if (L.phits > L.lastPh) { L.lastPh = L.phits; L.sLen += 2; L.sSpd *= 1.12; }
+      let dx = L.wp.x - ch.x, dy = L.wp.y - ch.y, d = Math.hypot(dx, dy);
+      if (d < 24) { L.wp = { x: rnd(60, 340), y: rnd(130, 360) }; dx = L.wp.x - ch.x; dy = L.wp.y - ch.y; d = Math.hypot(dx, dy); }
+      L.svx += (dx / d * L.sSpd - L.svx) * Math.min(1, dt * 2); L.svy += (dy / d * L.sSpd - L.svy) * Math.min(1, dt * 2);
+      ch.x = clamp(ch.x + L.svx * dt, 45, 355); ch.y = clamp(ch.y + L.svy * dt, 125, 365);
+      L.trail.unshift({ x: ch.x, y: ch.y + R * 1.3 }); if (L.trail.length > 600) L.trail.length = 600;
+      // кульки хвоста — кожні 20 px уздовж сліду
+      L.orbs = []; let acc = 0, need = 34;
+      for (let i = 1; i < L.trail.length && L.orbs.length < L.sLen; i++) {
+        acc += Math.hypot(L.trail[i].x - L.trail[i - 1].x, L.trail[i].y - L.trail[i - 1].y);
+        if (acc >= need) { L.orbs.push(L.trail[i]); need += 20; }
+      }
+    },
+    collide(p) {
+      for (const o of L.orbs) if (circleBounce(p, o.x, o.y, 11, 0.9)) { p.reflected = true; SND.clink(); burst(p.x, p.y, ['#dff3ff', '#fff', '#9fd6ff'], 6, true); return 'ok'; }
+      return null;
+    },
+    drawBack() {
+      for (let i = L.orbs.length - 1; i >= 0; i--) {
+        const o = L.orbs[i], g = ctx.createRadialGradient(o.x - 4, o.y - 4, 2, o.x, o.y, 12);
+        g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, '#b7dfff'); g.addColorStop(1, '#6a9fd8');
+        ctx.fillStyle = '#7b5a2a'; circ(o.x, o.y, 12.5); ctx.fillStyle = g; circ(o.x, o.y, 10.5);
+      }
+    },
+    task(g, h) { return `🐍 Влуч у мене ${g} рази. Дзеркальний хвіст відбиває назад (${h}/${g})`; },
+  },
+
+  /* ---------- «Дзеркальний пінг-понг»: ракетка-дзеркало ловить кидки, стіни пружинять ---------- */
+  pong: {
+    setup(P) {
+      ch.x = 200; L.pad = { x: 200, y: 300, w: P.padW }; L.plat = { x: 200, w: 120 };
+      return 210;
+    },
+    predictX(p) {
+      let x = p.x, y = p.y, vx = p.vx, vy = p.vy; const dt = 1 / 60;
+      for (let k = 0; k < 120; k++) {
+        vy += G * dt; x += vx * dt; y += vy * dt;
+        if (x < 10) { x = 20 - x; vx = -vx; } if (x > WW - 10) { x = 2 * (WW - 10) - x; vx = -vx; }
+        if (vy > 0 && y > L.pad.y + 40) return null;
+        if (y <= L.pad.y) return x;
+      }
+      return null;
+    },
+    update(dt, t, P) {
+      ch.x = 200 + Math.sin(t * 0.7) * 110; L.plat.x = ch.x;
+      let target = ch.x;
+      for (const p of projs) { if (p.vy < 0 && p.y > L.pad.y) { const x = this.predictX(p); if (x !== null) { target = x; break; } } }
+      const d = target - L.pad.x; L.pad.x += clamp(d, -P.padSpeed * dt, P.padSpeed * dt);
+      L.pad.x = clamp(L.pad.x, L.pad.w / 2 + 10, WW - L.pad.w / 2 - 10);
+      L.segs = [
+        { x1: 6, y1: 40, x2: 6, y2: 620, type: 'bounce' },
+        { x1: WW - 6, y1: 40, x2: WW - 6, y2: 620, type: 'bounce' },
+        { x1: L.pad.x - L.pad.w / 2, y1: L.pad.y, x2: L.pad.x + L.pad.w / 2, y2: L.pad.y, type: 'bounce' },
+      ];
+    },
+    drawBack() {
+      ctx.strokeStyle = 'rgba(123,108,255,.25)'; ctx.lineWidth = 2; ctx.setLineDash([10, 10]);
+      ctx.beginPath(); ctx.moveTo(10, L.pad.y); ctx.lineTo(WW - 10, L.pad.y); ctx.stroke(); ctx.setLineDash([]);
+    },
+    task(g, h) { return `🏓 Я відбиваю ракеткою. Бий із відскоком від стін (${h}/${g})`; },
+  },
+};
+
 /* --- «Дві печери»: дві дзеркальні печери, дзеркала гойдаються навколо нижнього краю --- */
 function buildCave2(t, P) {
   const segs = [];
@@ -1101,6 +1442,7 @@ function updateLevel(dt) {
     case 'wind': ch.x = 200 + Math.sin(t * P.speed) * 115; updateWind(dt); break;
     case 'mirror': ch.x = clamp(200 + Math.sin(t * 0.55) * 85 + L.dg.off, R * 1.4, WW - R * 1.4); setMirrorSeg(); break;
     case 'windmirror': ch.x = 200 + Math.sin(t * P.speed) * 105; updateWind(dt); setMirrorSeg(); break;
+    default: if (B2[L.mode]) B2[L.mode].update(dt, t, P); break;
     case 'cave': ch.x = (P.mirrored ? WW - 286 : 286) + Math.sin(t * 0.7) * 18; break;
     case 'cave2':
       if (!L.busy && !L.done) {
@@ -1192,12 +1534,13 @@ function stepProj(p, dt) {
   for (const s of L.segs) { const tt = segInt(x0, y0, p.x, p.y, s.x1, s.y1, s.x2, s.y2); if (tt !== null && tt < bt) { bt = tt; best = s; } }
   if (best) {
     const ix = x0 + (p.x - x0) * bt, iy = y0 + (p.y - y0) * bt;
-    if (best.type === 'mirror') {
+    if (best.type === 'mirror' || best.type === 'bounce') {
       let sx = best.x2 - best.x1, sy = best.y2 - best.y1; const l = Math.hypot(sx, sy); sx /= l; sy /= l;
       const nx = -sy, ny = sx, dot = p.vx * nx + p.vy * ny;
       p.vx = (p.vx - 2 * dot * nx) * 0.92; p.vy = (p.vy - 2 * dot * ny) * 0.92;
       const side = ((x0 - ix) * nx + (y0 - iy) * ny) >= 0 ? 1 : -1;
       p.x = ix + nx * side * 1.5; p.y = iy + ny * side * 1.5;
+      if (best.type === 'bounce') { tn(520, 760, 0.08, 0.08, 'triangle'); return 'ok'; }
       p.reflected = true; SND.clink(); burst(ix, iy, ['#dff3ff', '#ffffff', '#9fd6ff'], 8, true);
       if (best.held) { setExpr('cool', 0.9); if (Math.random() < 0.5) sayPick(CONFIG.phrases.mirror); }
       return 'ok';
@@ -1217,12 +1560,13 @@ function stepProj(p, dt) {
       return 'ok';
     }
   }
+  if (B2[L.mode] && B2[L.mode].collide) { const r = B2[L.mode].collide(p); if (r) return r; }
   for (const b of L.balloons) {
     if (b.alive && Math.hypot(p.x - b.x, p.y - b.y) < b.r + PR) { popBalloon(b); return 'gone'; }
   }
   if (L.clones) {
     for (const c of L.clones) if (onCharAt(c, p.x, p.y, PR * 0.5)) { hitClone(c, p); return 'gone'; }
-  } else if (!L.shield && onChar(p.x, p.y, PR * 0.5 + (L.tier || 0) * 2)) { hitChar(p); return 'gone'; }
+  } else if (!L.shield && !L.noChar && onChar(p.x, p.y, PR * 0.5 + (L.tier || 0) * 2)) { hitChar(p); return 'gone'; }
   if (p.reflected && !p.hail && p.vy > 0 && Math.hypot(p.x - LAUNCH.x, p.y - (LAUNCH.y + 10)) < 40) { hitPlayer(p); return 'gone'; }
   if (p.y >= GROUND) { wallSplat(p.x, GROUND - 2, kindOf(p), 0.5); burst(p.x, GROUND, TOMATO_COLS, 8); SND.miss(); return miss(); }
   if (p.x < -60 || p.x > WW + 60 || p.y > WH + 60) { SND.miss(); return miss(); }
@@ -1328,20 +1672,29 @@ function showOnly(id) {
   // під час гри Telegram перепитає перед закриттям, щоб не втратити бій випадковим тапом
   try { if (IN_TG) { if (id) TG.disableClosingConfirmation && TG.disableClosingConfirmation(); else TG.enableClosingConfirmation && TG.enableClosingConfirmation(); } } catch (e) {}
 }
-function isOpen(i) { return i === 0 || (STARS[i - 1] || 0) > 0; }
+// Блок 2 відкривається, коли рівні 1–6 пройдені на ★★★
+function block2Open() { for (let k = 0; k < 6; k++) if ((STARS[k] || 0) < 3) return false; return true; }
+const B2_FIRST = LEVELS.findIndex(D => D.block2);
+function isOpen(i) {
+  if (LEVELS[i].block2) return block2Open() && (i === B2_FIRST || (STARS[i - 1] || 0) > 0);
+  return i === 0 || (STARS[i - 1] || 0) > 0;
+}
 function buildMenu() {
   state = 'menu'; L = null; E = null; projs.length = 0; bubble = null; hideHang = false;
   $('hi').textContent = CONFIG.greeting;
-  const box = $('levels'); box.innerHTML = '';
+  const box1 = $('levels'), box2 = $('levels2'); box1.innerHTML = ''; box2.innerHTML = '';
+  const b2open = block2Open(), b2stars = LEVELS.reduce((a, D, k) => a + (D.block2 ? (STARS[k] || 0) : 0), 0);
+  $('b2head').textContent = b2open ? `🔥 Блок 2 · ★ ${b2stars}/18` : '🔒 Блок 2 — пройди рівні 1–6 на ★★★';
   LEVELS.forEach((D, i) => {
+    const box = D.block2 ? box2 : box1;
     const b = document.createElement('button');
     const open = isOpen(i);
     b.className = 'lv' + (open ? '' : ' locked') + (D.boss ? ' boss' : '');
-    const n = document.createElement('div'); n.textContent = open ? (D.boss ? '👑' : i + 1) : '🔒';
+    const n = document.createElement('div'); n.textContent = open ? (D.boss ? '👑' : D.block2 ? i - 6 : i + 1) : '🔒';
     const st = document.createElement('small');
     st.textContent = open ? ('★'.repeat(STARS[i] || 0) + '☆'.repeat(3 - (STARS[i] || 0))) : '';
     b.append(n, st);
-    b.addEventListener('click', () => { initAudio(); if (!open) toast('Спершу пройди попередній рівень'); else showIntro(i); });
+    b.addEventListener('click', () => { initAudio(); if (!open) toast(D.block2 && !b2open ? 'Пройди рівні 1–6 на ★★★' : 'Спершу пройди попередній рівень'); else showIntro(i); });
     box.appendChild(b);
   });
   const total = STARS.reduce((a, b) => a + (b || 0), 0);
@@ -1374,7 +1727,7 @@ function agoText(ms) {
   const h = Math.round(m / 60); if (h < 24) return `${h} год тому`;
   return `${Math.round(h / 24)} дн тому`;
 }
-function lvlName(l) { return l === 7 ? 'боса 👑' : `рівень ${l}`; }
+function lvlName(l) { return l === 7 ? 'боса 👑' : l > 7 ? `блок 2 · рівень ${l - 7}` : `рівень ${l}`; }
 function describeEvent(ev) {
   const st = n => '★'.repeat(n || 0) + '☆'.repeat(3 - (n || 0));
   switch (ev.e) {
@@ -1382,7 +1735,7 @@ function describeEvent(ev) {
     case 'open': return '📱 відкрила гру';
     case 'level_start': return `▶️ почала ${lvlName(ev.lvl)}${ev.tier ? ` (прихована ступінь ${ev.tier})` : ''}`;
     case 'level_win': return `✅ пройшла ${lvlName(ev.lvl)} ${st(ev.stars)} (🍅${ev.ammo} ❤️${ev.lives})`;
-    case 'level_lose': return `❌ програла ${lvlName(ev.lvl)}${ev.phase > 1 ? ` на фазі ${ev.phase}` : ''}: ${ev.reason === 'lives' ? 'життя скінчились' : ev.reason === 'time' ? 'час вийшов' : 'помідори скінчились'}${ev.hp !== undefined ? ` · в Его лишилось ${ev.hp}%` : ''}${ev.tier ? ` · ступінь ${ev.tier}` : ''}`;
+    case 'level_lose': return `❌ програла ${lvlName(ev.lvl)}${ev.phase > 1 ? ` на фазі ${ev.phase}` : ''}: ${ev.reason === 'lives' ? 'життя скінчились' : ev.reason === 'time' ? 'час вийшов' : ev.reason === 'escape' ? 'утік у хмари' : ev.reason === 'invade' ? 'відображення прорвалися' : 'помідори скінчились'}${ev.hp !== undefined ? ` · в Его лишилось ${ev.hp}%` : ''}${ev.tier ? ` · ступінь ${ev.tier}` : ''}`;
     case 'boss_phase': return `👑 бос: фаза ${ev.phase}`;
     case 'game_complete': return `🏆 пройшла всю гру!${ev.deaths ? ` (смертей на босі: ${ev.deaths})` : ''}${ev.tier ? ` · на прихованій ступені ${ev.tier}` : ''}`;
     case 'final_answer': return ev.a === 'yes' ? '💬 відповіла «Так 😏»' : '💬 відповіла «Подумаю…»';
@@ -1441,7 +1794,7 @@ $('admRefresh').addEventListener('click', loadAdmin);
 $('admClose').addEventListener('click', buildMenu);
 function showIntro(i) {
   const D = LEVELS[i];
-  $('iNum').textContent = D.boss ? `Фінальний бос${ATT[i] ? ` · смертей: ${ATT[i]} 💀` : ''}` : `Рівень ${i + 1}`;
+  $('iNum').textContent = D.boss ? `Фінальний бос${ATT[i] ? ` · смертей: ${ATT[i]} 💀` : ''}` : D.block2 ? `Блок 2 · рівень ${i - 6}` : `Рівень ${i + 1}`;
   $('iName').textContent = D.name; $('iDesc').textContent = D.desc;
   const g = $('iGoal'); g.innerHTML = '';
   const chips = D.boss ? [D.hp ? `💥 ${D.phases[0].goal} HP` : `🎯 ${D.phases[0].goal}`, `⏱ ${Math.floor(D.timeLimit / 60)}:${String(D.timeLimit % 60).padStart(2, '0')}`, `🍅 ${D.ammo}`, '❤️ 3'] : [`🎯 ${D.phases[0].goal} влуч.`, `🍅 ${D.ammo}`, '❤️ 3'];
@@ -1463,7 +1816,9 @@ function showResult() {
   if (L.win) {
     const frac = L.ammo / D.ammo;
     const stars = frac >= 0.3 ? 3 : frac >= 0.1 ? 2 : 1;
+    const b2was = block2Open();
     STARS[lvIdx] = Math.max(STARS[lvIdx] || 0, stars); save('pt_stars', STARS);
+    if (!b2was && block2Open()) setTimeout(() => { toast('🔓 Відкрито БЛОК 2!', 3200); SND.unlock && SND.unlock(); }, 600);
     SND.win(); buzz('win'); confetti();
     track('level_win', { lvl: lvIdx + 1, stars, ammo: L.ammo, lives: L.lives });
     if (D.boss) { startEnding(); return; }
@@ -1472,12 +1827,14 @@ function showResult() {
     $('rText').textContent = stars === 3 ? 'Ідеально. Мені вже страшно.' : stars === 2 ? 'Непогано. Але на 3 зірки треба економніше 😏' : 'Пройдено, але на межі. Спробуєш на 3 зірки?';
     $('rNext').classList.remove('hidden');
     $('rNext').textContent = 'Далі ➜';
-    $('rNext').onclick = () => showIntro(lvIdx + 1);
+    const nx = lvIdx + 1;
+    if (nx < LEVELS.length && isOpen(nx)) { $('rNext').onclick = () => showIntro(nx); }
+    else { $('rNext').textContent = 'До меню'; $('rNext').onclick = buildMenu; }
   } else {
     SND.lose(); buzz('bad');
-    const reason = L.lives <= 0 ? 'lives' : L.reason === 'time' ? 'time' : 'ammo';
+    const reason = L.lives <= 0 ? 'lives' : (L.reason || 'ammo');
     track('level_lose', D.boss ? { lvl: lvIdx + 1, reason, tier: L.tier, hp: Math.round(100 * (1 - Math.min(L.phits, L.pgoal) / L.pgoal)) } : { lvl: lvIdx + 1, reason, phase: L.phase + 1 });
-    $('rTitle').textContent = reason === 'lives' ? 'Життя закінчились 💔' : reason === 'time' ? 'Час вийшов ⏱' : 'Помідори закінчились 🍅';
+    $('rTitle').textContent = reason === 'lives' ? 'Життя закінчились 💔' : reason === 'time' ? 'Час вийшов ⏱' : reason === 'escape' ? 'Утік у хмари ☁️' : reason === 'invade' ? 'Відображення прорвалися 👾' : 'Помідори закінчились 🍅';
     $('rStars').textContent = '☆☆☆';
     $('rText').textContent = pick(CONFIG.phrases.lose);
     $('rNext').classList.add('hidden');
@@ -1752,6 +2109,7 @@ function taskText() {
     case 'wind': return `${pre}🌬️ Влуч ${g} разів. Вітер (стрілка вгорі) зносить помідор — цілься з поправкою`;
     case 'mirror': return `🪞 Влуч ${g} разів. Дзеркало відбиває в тебе, я ухиляюсь — роби фінт`;
     case 'windmirror': return `${pre}🌬️🪞 Влуч ${g} рази: вітер + дзеркало одночасно`;
+    default: if (B2[L.mode]) return B2[L.mode].task(g, h); break;
     case 'cave2': return `↘️ Влуч ${g} рази через дзеркало. Я перебігаю між печерами 🔴, дзеркала гойдаються`;
     case 'cave': return `${pre}↘️ Влуч ${g} ${g > 4 ? 'разів' : 'рази'}. Кидай високо у щілину біля стрілки — дзеркало відіб’є помідор у печеру`;
     case 'order': return L.shield
@@ -1774,7 +2132,7 @@ function updateHud(force) {
   te.classList.toggle('hidden', state !== 'play' || !!L.D.boss);
   $('hInfo').textContent = L.D.boss
     ? `⏱ ${Math.floor(Math.ceil(L.timeLeft) / 60)}:${String(Math.ceil(L.timeLeft) % 60).padStart(2, '0')}`
-    : `Р.${lvIdx + 1} · 🎯${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
+    : `${L.D.block2 ? 'Б2·' + (lvIdx - 6) : 'Р.' + (lvIdx + 1)} · 🎯${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
   $('hAmmo').textContent = `${useSecret ? CONFIG.secretWeapon.emoji : '🍅'}${L.ammo} ${'❤️'.repeat(Math.max(0, L.lives))}${'🤍'.repeat(3 - Math.max(0, L.lives))}`;
   const pw = $('hPower');
   pw.classList.toggle('hidden', !L.D.hail || state !== 'play');
@@ -1851,7 +2209,10 @@ function drawPlatform() {
 function drawSegs() {
   for (const s of L.segs) {
     ctx.lineCap = 'round';
-    if (s.type === 'wall') {
+    if (s.type === 'bounce') {
+      ctx.strokeStyle = '#7b6cff'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2; ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke(); ctx.setLineDash([]);
+    } else if (s.type === 'wall') {
       ctx.strokeStyle = '#8a6a5e'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
       ctx.strokeStyle = '#a8877a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
     } else {
@@ -2008,14 +2369,17 @@ function render() {
     drawWind();
     drawStatements();
     wallSplats.filter(s => s.y < GROUND - 5).forEach(s => drawSplat(s, s.x, s.y));
+    if (B2[L.mode] && B2[L.mode].drawBack) B2[L.mode].drawBack();
     drawTeleportPads();
-    if (L.clones) L.clones.forEach(c => drawChar(c));
+    if (L.noChar) {}
+    else if (L.clones) L.clones.forEach(c => drawChar(c));
     else if (L.mode === 'invisible') drawInvisibleBoss();
     else if (L.P && L.P.ghost) drawGhost(L.reveal > 0 ? 1 : 0.41 + Math.sin(L.t * 9) * 0.08);
     else drawChar(ch);
     drawBossBar();
     drawShield();
     drawSegs();
+    if (B2[L.mode] && B2[L.mode].drawFront) B2[L.mode].drawFront();
     drawGapHint();
     drawBalloons();
     wallSplats.filter(s => s.y >= GROUND - 5).forEach(s => drawSplat(s, s.x, s.y));
