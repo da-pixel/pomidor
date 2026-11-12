@@ -30,7 +30,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 #task{position:fixed;left:10px;right:10px;top:calc(env(safe-area-inset-top) + 58px);margin:0 auto;max-width:420px;background:rgba(43,27,23,.86);color:#fff;border-radius:14px;padding:8px 12px;font-weight:700;font-size:14px;line-height:1.3;text-align:center;pointer-events:none;z-index:3}
 #task.pulse{animation:tp .6s ease 2}
 @keyframes tp{50%{transform:scale(1.05);background:#e8322c}}
-#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 112px);transform:translate(-50%,-8px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-weight:700;font-size:15px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;z-index:5}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 112px);transform:translate(-50%,-8px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-weight:700;font-size:15px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:normal;text-align:center;line-height:1.3;width:max-content;max-width:calc(100% - 32px);border-radius:16px;z-index:5}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 #banner{position:fixed;left:16px;right:16px;top:24%;margin:0 auto;max-width:340px;background:linear-gradient(135deg,#fff6c4,#f7c936);border-radius:22px;padding:16px 18px;text-align:center;box-shadow:0 12px 40px rgba(180,120,0,.4);pointer-events:none;opacity:0;transform:scale(.6);transition:opacity .25s,transform .35s cubic-bezier(.2,1.6,.4,1);z-index:5}
 #banner.show{opacity:1;transform:scale(1)}
@@ -194,7 +194,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <script>
 'use strict';
 /* Автооновлення: якщо Telegram показав закешовану стару версію — підтягуємо свіжу */
-const BUILD = '2026-11-10-17';
+const BUILD = '2026-11-12-1';
 (function checkFresh() {
   try {
     fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
@@ -255,15 +255,16 @@ const CONFIG = {
    РІВНІ — кожен трохи складніший за попередній
    ============================================================ */
 const LEVELS = [
-  { name: 'Розминка', ammo: 12, preview: 0.55,
-    phases: [{ mode: 'static', goal: 5 }],
-    desc: 'Тягни палець назад і відпускай, як рогатку.' },
-  { name: 'Вітер', ammo: 13, preview: 0.4,
-    phases: [{ mode: 'wind', goal: 5, windMax: 260, speed: 0.8 }],
-    desc: 'Вітер зносить помідор — дивись на стрілку вгорі.' },
-  { name: 'Дзеркальний щит', ammo: 13, preview: 0.36,
-    phases: [{ mode: 'mirror', goal: 5, mspeed: 1.1 }],
-    desc: 'Не влуч у дзеркало 🪞 — помідор полетить назад у тебе.' },
+  // Рівні 1–3 навчають УСІМ механікам, які потім зустрінуться (особливо на босі)
+  { name: 'Розминка', ammo: 10, preview: 0.4,
+    phases: [{ mode: 'static', goal: 5, move: 32, attack: 5.5, shardKinds: ['arc'], shardSlow: 1.5 }],
+    desc: 'Тягни назад і відпускай: що сильніший натяг — то сильніший кидок (на повному — ✦ крит). Уламки ⚠️ збивай помідором.' },
+  { name: 'Вітер і телепорт', ammo: 11, preview: 0.3,
+    phases: [{ mode: 'teleport', goal: 5, windMax: 300, every: 2.6, warn: 0.9, spots: [{ x: 90, y: 250 }, { x: 200, y: 205 }, { x: 310, y: 250 }] }],
+    desc: 'Вітер зносить помідор. Червоне коло 🔴 — туди я телепортуюсь, кидай наперед.' },
+  { name: 'Дзеркала й ухиляння', ammo: 10, preview: 0.27, hail: true, powerMax: 4,
+    phases: [{ mode: 'mirror', goal: 5, mspeed: 1.35, dodge: 0.5, dodgeCd: 1.6, attack: 6.5, shardKinds: ['wave', 'zig'], shardSlow: 1.25 }],
+    desc: 'Не влуч у дзеркало 🪞. Я ухиляюсь — роби фінт. 4 влучання заряджають 🌧️ Град.' },
   { name: 'Рикошет', ammo: 14, preview: 0.32,
     phases: [{ mode: 'cave', goal: 3 }],
     desc: 'Я в печері. Кидай у щілину біля стрілки — дзеркало відіб’є помідор у мене.' },
@@ -273,7 +274,7 @@ const LEVELS = [
   { name: 'Озеро Нарциса', ammo: 16, preview: 0.28,
     phases: [{ mode: 'clones', goal: 3 }],
     desc: 'Правду каже лише справжній, копії брешуть. Вирахуй його й влуч.' },
-  { name: 'Бос: Его', ammo: 70, preview: 0, boss: true, timeLimit: 185, hp: true,
+  { name: 'Бос: Его', ammo: 70, preview: 0, boss: true, timeLimit: 185, hp: true, hail: true,
     phases: [{ mode: 'fury', goal: 220 }],
     desc: 'Чим сильніше натягнеш — тим більше шкоди. Він ухиляється й кидає уламки — збивай їх 💀' },
 ];
@@ -747,7 +748,7 @@ function setupPhase() {
     case 'clones': feet = 400; L.plat = { x: 200, w: 370 }; makeClones(); if (P.windMax) L.windOn = true; break;
     case 'carousel': feet = 360; ch.x = 200; L.plat = { x: 200, w: 200 }; break;
     case 'teleport': case 'fury': {
-      L.spots = [{ x: 80, y: 250 }, { x: 200, y: 200 }, { x: 320, y: 250 }, { x: 110, y: 390 }, { x: 290, y: 390 }, { x: 200, y: 330 }];
+      L.spots = P.spots || [{ x: 80, y: 250 }, { x: 200, y: 200 }, { x: 320, y: 250 }, { x: 110, y: 390 }, { x: 290, y: 390 }, { x: 200, y: 330 }];
       L.tpCur = Math.floor(Math.random() * L.spots.length); L.tpNext = null; L.tpT = (P.every || BOSS_STAGES[0].every) + 1;
       ch.x = L.spots[L.tpCur].x; ch.y = L.spots[L.tpCur].y; feet = ch.y + R * 3.25;
       if (P.windMax) L.windOn = true;
@@ -873,7 +874,7 @@ function pickSpot() { let n; do { n = Math.floor(Math.random() * L.spots.length)
 function tpStep(dt, P) {
   if (L.busy) return;
   L.tpT -= dt;
-  if (L.tpT < (P.warn || 0.7) && L.tpNext === null) L.tpNext = pickSpot();
+  if (L.tpT < (P.warn || 0.7) && L.tpNext === null) { L.tpNext = pickSpot(); if (!L.D.boss && !L.tpTold) { L.tpTold = true; toast('🔴 Червоне коло — туди я стрибну. Кидай наперед!', 2800); } }
   if (L.tpT <= 0 && L.tpNext !== null) {
     burst(ch.x, ch.y + R, ['#c7b8ff', '#ffffff', '#ffd6f5'], 18, true);
     L.tpCur = L.tpNext; L.tpNext = null; L.dg.off = 0; L.dg.target = 0;
@@ -894,7 +895,7 @@ function predictHit(p) {
 // Бос «читає» кидки: ухиляється або телепортується раніше
 function bossAI() {
   const P = L.P;
-  if (!L.D.boss || L.busy || L.done || L.clones || (!P.dodge && !P.smart)) return;
+  if (L.busy || L.done || L.clones || (!P.dodge && !P.smart)) return;
   for (const p of projs) {
     if (p.ai) continue;
     const h = predictHit(p);
@@ -907,6 +908,7 @@ function bossAI() {
       const base = ch.x - L.dg.off;
       if (base + dir * R * 3.2 > WW - R * 1.4 || base + dir * R * 3.2 < R * 1.4) dir = -dir;
       L.dg.target = dir * R * 3.2; L.dg.t = 0.8; L.dg.cd = P.dodgeCd || 1.2;
+      if (!L.D.boss && !L.dgTold) { L.dgTold = true; toast('😎 Я ухиляюсь! Фінт: кинь двічі поспіль', 2800); }
       SND.swap();
       if (L.mode !== 'invisible') { setExpr('cool', 0.7); if (Math.random() < 0.5) sayPick(CONFIG.phrases.dodge, 1.2); }
     }
@@ -924,14 +926,15 @@ function updateDodge(dt) {
   d.off += (d.target - d.off) * Math.min(1, dt * 14);
 }
 const POWER_MAX = 5;
+const pmax = () => (L && L.D.powerMax) || POWER_MAX;
 function chargePower() {
-  if (!L.D.boss || L.hail) return;
-  const was = L.power; L.power = Math.min(POWER_MAX, L.power + 1);
-  if (L.power === POWER_MAX && was < POWER_MAX) { toast('🌧️ Град заряджено — тисни кнопку вгорі!'); SND.unlock && SND.unlock(); }
+  if (!L.D.hail || L.hail) return;
+  const was = L.power; L.power = Math.min(pmax(), L.power + 1);
+  if (L.power === pmax() && was < pmax()) { toast('🌧️ Град заряджено — тисни кнопку внизу праворуч!', 2600); SND.unlock && SND.unlock(); }
   updateHud();
 }
 function castHail() {
-  if (!L || !L.D.boss || L.power < POWER_MAX || L.busy || L.done) return;
+  if (!L || !L.D.hail || L.power < pmax() || L.busy || L.done) return;
   L.power = 0; L.hail = { left: 12, t: 0, hits: 0 };
   toast('🌧️ ГРАД ПОМІДОРІВ!'); SND.golden(); buzz('win'); updateHud();
 }
@@ -998,7 +1001,7 @@ function enemyStep(dt) {
       L.enemy.push(makeShard(ch.x, ch.y + R * 0.6));
       L.atkT = P.attack * rnd(0.8, 1.15); L.atkWarn = false;
       nz(0.25, 3000, 6000, 0.12, 'bandpass');
-      if (!L.atkTold) { L.atkTold = true; toast('⚠️ Его кидає уламки — збивай їх помідором!', 2600); }
+      if (!L.atkTold) { L.atkTold = true; toast('⚠️ Уламок! Збий його помідором, інакше −❤️', 2800); }
     }
   }
   for (let i = L.enemy.length - 1; i >= 0; i--) {
@@ -1032,10 +1035,10 @@ const EASES = {
   surge: u => u < 0.55 ? u * 0.45 : 0.2475 + (u - 0.55) * 1.672, // зависає, потім ривок
 };
 function makeShard(x, y) {
-  const kinds = ['arc', 'wave', 'zig', 'rush', 'lob'];
+  const kinds = (L.P && L.P.shardKinds) || ['arc', 'wave', 'zig', 'rush', 'lob'];
   const kind = pick(kinds), stage = L.stage || 0;
   const s = { kind, sx: x, sy: y, tx: LAUNCH.x + rnd(-10, 10), ty: LAUNCH.y - 4, t: 0, rot: 0, x, y,
-    D: rnd(1.3, 2.6) * (1 - 0.08 * stage) * (1 + 0.1 * (L.tier || 0)), ease: 'even', H: rnd(20, 90), A: 0, k: 0, ph: rnd(0, TAU), zz: [] };
+    D: rnd(1.3, 2.6) * (1 - 0.08 * stage) * (1 + 0.1 * (L.tier || 0)) * ((L.P && L.P.shardSlow) || 1), ease: 'even', H: rnd(20, 90), A: 0, k: 0, ph: rnd(0, TAU), zz: [] };
   if (kind === 'wave') { s.A = rnd(35, 70); s.k = rnd(2, 3.5); s.ease = pick(['even', 'brake']); }
   if (kind === 'zig') { const n = 2 + Math.floor(Math.random() * 2); for (let j = 0; j <= n + 1; j++) s.zz.push(j === 0 || j === n + 1 ? 0 : rnd(-80, 80)); s.ease = pick(['even', 'surge']); }
   if (kind === 'rush') { s.ease = pick(['rush', 'surge']); s.A = rnd(15, 35); s.k = 1; }
@@ -1074,9 +1077,9 @@ function updateLevel(dt) {
   L.t += dt; const t = L.t, P = L.P;
   updateDodge(dt);
   switch (L.mode) {
-    case 'static': ch.x = 290 + Math.sin(t * 0.6) * 10; break;
+    case 'static': ch.x = 290 + Math.sin(t * (P.move ? 0.8 : 0.6)) * (P.move || 10); break;
     case 'wind': ch.x = 200 + Math.sin(t * P.speed) * 115; updateWind(dt); break;
-    case 'mirror': ch.x = 200 + Math.sin(t * 0.55) * 85; setMirrorSeg(); break;
+    case 'mirror': ch.x = clamp(200 + Math.sin(t * 0.55) * 85 + L.dg.off, R * 1.4, WW - R * 1.4); setMirrorSeg(); break;
     case 'windmirror': ch.x = 200 + Math.sin(t * P.speed) * 105; updateWind(dt); setMirrorSeg(); break;
     case 'cave': ch.x = (P.mirrored ? WW - 286 : 286) + Math.sin(t * 0.7) * 18; break;
     case 'order':
@@ -1711,9 +1714,9 @@ function taskText() {
   const tl = L.timeLeft !== undefined ? ` · ⏱ ${Math.floor(Math.ceil(L.timeLeft) / 60)}:${String(Math.ceil(L.timeLeft) % 60).padStart(2, '0')}` : '';
   const pre = L.D.boss ? `👑 Фаза ${L.phase + 1}/${L.D.phases.length}${tl} · ` : '';
   switch (L.mode) {
-    case 'static': return `${pre}🎯 Влуч у мене ${g} разів. Тягни палець НАЗАД від цілі і відпускай`;
+    case 'static': return `🎯 Влуч ${g} разів. Сильніший натяг — сильніший кидок. ⚠️ Уламки збивай`;
     case 'wind': return `${pre}🌬️ Влуч ${g} разів. Вітер (стрілка вгорі) зносить помідор — цілься з поправкою`;
-    case 'mirror': return `${pre}🪞 Влуч ${g} разів. Не влуч у дзеркало — помідор полетить у тебе`;
+    case 'mirror': return `🪞 Влуч ${g} разів. Дзеркало відбиває в тебе, я ухиляюсь — роби фінт`;
     case 'windmirror': return `${pre}🌬️🪞 Влуч ${g} рази: вітер + дзеркало одночасно`;
     case 'cave': return `${pre}↘️ Влуч ${g} ${g > 4 ? 'разів' : 'рази'}. Кидай високо у щілину біля стрілки — дзеркало відіб’є помідор у печеру`;
     case 'order': return L.shield
@@ -1721,7 +1724,7 @@ function taskText() {
       : `${pre}🎯 Купол зник! Влуч у мене ${g} рази`;
     case 'clones': return `${pre}🧩 Правду каже лише справжній — вирахуй його й влуч (${h}/${g}). Копія = мінус життя`;
     case 'carousel': return `${pre}🎠 Дзеркала крутяться, а я ухиляюсь. Фінт: кинь один — другий туди, куди я відскочу (${h}/${g})`;
-    case 'teleport': return `${pre}✨ Телепорт: кидай у червоне коло наперед. Але я можу стрибнути раніше 😏 (${h}/${g})`;
+    case 'teleport': return `🔴 Влуч ${g} разів. Червоне коло — куди я стрибну, кидай наперед`;
     case 'invisible': return `${pre}👻 Я невидимий і ухиляюсь. Шукай мене за відображенням в озері (${h}/${g})`;
     case 'fury': return `👑 ⏱ ${tl.replace(' · ⏱ ', '')} · Влуч ${g} разів (${h}/${g}). Кидай у червоне коло наперед, обходь дзеркала, збивай уламки ⚠️`;
   }
@@ -1736,21 +1739,25 @@ function updateHud(force) {
   te.classList.toggle('hidden', state !== 'play' || !!L.D.boss);
   $('hInfo').textContent = L.D.boss
     ? `⏱ ${Math.floor(Math.ceil(L.timeLeft) / 60)}:${String(Math.ceil(L.timeLeft) % 60).padStart(2, '0')}`
-    : `Рів. ${lvIdx + 1} · 🎯 ${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
+    : `Р.${lvIdx + 1} · 🎯${Math.min(L.phits, L.pgoal)}/${L.pgoal}`;
   $('hAmmo').textContent = `${useSecret ? CONFIG.secretWeapon.emoji : '🍅'}${L.ammo} ${'❤️'.repeat(Math.max(0, L.lives))}${'🤍'.repeat(3 - Math.max(0, L.lives))}`;
   const pw = $('hPower');
-  pw.classList.toggle('hidden', !L.D.boss || state !== 'play');
+  pw.classList.toggle('hidden', !L.D.hail || state !== 'play');
   if (L.D.boss) {
-    const ready = L.power >= POWER_MAX && !L.hail;
+    const ready = L.power >= pmax() && !L.hail;
     pw.classList.toggle('ready', ready);
-    pw.style.setProperty('--p', (L.hail ? 0 : L.power / POWER_MAX * 100) + '%');
-    $('hPowerLbl').textContent = L.hail ? 'ллє…' : ready ? 'ГРАД!' : `${L.power}/${POWER_MAX}`;
+    pw.style.setProperty('--p', (L.hail ? 0 : L.power / pmax() * 100) + '%');
+    $('hPowerLbl').textContent = L.hail ? 'ллє…' : ready ? 'ГРАД!' : `${L.power}/${pmax()}`;
   }
   $('hSecret').classList.toggle('hidden', !secretUnlocked || !!L.D.boss);
   $('hSecret').classList.toggle('on', useSecret);
 }
 let toastT;
-function toast(text, ms) { const t = $('toast'); t.textContent = text; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms || 1900); }
+function toast(text, ms) {
+  const t = $('toast'), task = $('task');
+  // підказка — під рядком завдання, щоб не перекривати його
+  t.style.top = (!task.classList.contains('hidden') && task.offsetHeight) ? (task.getBoundingClientRect().bottom + 8) + 'px' : '';
+  t.textContent = text; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms || 1900); }
 
 /* ---------- input ---------- */
 cv.addEventListener('pointerdown', e => {
